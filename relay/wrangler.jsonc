@@ -1,0 +1,8 @@
+{
+  // Relays the armed Mac's camera to the owner's phone browser. Deploy: npx wrangler deploy
+  "name": "guardmode-relay",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-01",
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Room" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }]
+}
