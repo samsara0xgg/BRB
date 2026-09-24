@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreImage
+import IOKit
 
 /// Records the built-in camera (720p, no audio) to ~/Movies/GuardMode/<start time>.mov for the whole
 /// armed session. The movie output writes a fragment every 10 s, so a killed process still leaves a
@@ -13,6 +14,16 @@ final class Recorder: NSObject, AVCaptureFileOutputRecordingDelegate, AVCaptureV
   private var wantFrame: ((Data?) -> Void)?  // frameQueue only
   private var observers: [NSObjectProtocol] = []
   private var active = false
+  private var counted = false  // in `running`
+
+  /// Recorders with the camera on in this process (main queue).
+  private(set) static var running = 0
+
+  /// The built-in camera hardware is streaming, whoever asked for it (what the green light shows).
+  static var hardwareStreaming: Bool {
+    IORegistryEntrySearchCFProperty(IORegistryGetRootEntry(kIOMainPortDefault), kIOServicePlane, "FrontCameraStreaming" as CFString,
+                                    nil, IOOptionBits(kIORegistryIterateRecursively)) as? Bool ?? false
+  }
 
   static var camera: AVCaptureDevice? {
     AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: .unspecified).devices.first
@@ -47,6 +58,8 @@ final class Recorder: NSObject, AVCaptureFileOutputRecordingDelegate, AVCaptureV
       })
     }
     session.startRunning()
+    Recorder.running += 1
+    counted = true
   }
 
   /// The next camera frame as a JPEG on the main queue, or nil when none arrives within 1.5 s
@@ -99,6 +112,8 @@ final class Recorder: NSObject, AVCaptureFileOutputRecordingDelegate, AVCaptureV
   }
 
   func stop() {
+    if counted { Recorder.running -= 1 }
+    counted = false
     active = false
     output.stopRecording()
     session.stopRunning()

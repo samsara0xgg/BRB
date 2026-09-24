@@ -15,9 +15,9 @@ Menu-bar guard for leaving the MacBook on a library or cafe table.
 - The siren's volume is set in the menu under 报警音量 (full when never set). 静音（测试用） is the
   silent test mode: everything else runs as usual (lock, recording, stages), the speakers stay
   muted.
-- To disarm, rest a finger on Touch ID (do not press it: a press is the power key and counts as
-  someone at the laptop). Nothing shows on screen; GuardMode holds the keyboard focus while armed
-  and hands it back. A finger that is not yours, tried until macOS gives up, triggers. Unlocking
+- To disarm, rest a finger on Touch ID, or press it (seen live: the finger is read before the press
+  locks the screen). Nothing shows on screen; GuardMode holds the keyboard focus while armed and
+  hands it back. A finger that is not yours, tried until macOS gives up, triggers. Unlocking
   the Mac also disarms, and restores your volume after an alarm.
 - Once the screen is locked (the display slept, or after a trigger), keys and touches no longer
   trigger, so waking the Mac to unlock it stays silent. Lifting, the lid, and the charger still do.

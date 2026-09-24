@@ -112,6 +112,7 @@ func selftest() {
   let speakers = Alarm.builtInSpeakers()
   check(speakers != nil, "built-in speakers: \(speakers.map { "\(Alarm.name($0)), volume \(Alarm.volume($0))" } ?? "none")")
   check(Recorder.camera != nil, "built-in camera: \(Recorder.camera?.localizedName ?? "none")")
+  print("INFO camera hardware streaming now: \(Recorder.hardwareStreaming ? "yes" : "no")")
   check(GuardApp.lockScreen != nil, "lock-screen function resolves (not called)")
 
   let sensors = Sensors()

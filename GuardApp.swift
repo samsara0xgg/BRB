@@ -259,6 +259,15 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     phase = .idle
     stopWatching()
     log("disarmed by \(how)")
+    // ponytail: macOS can restart the camera stream by itself after we stopped it (live 2026-09-24:
+    // a Touch ID press powered the camera off and on around a disarm, and the light stayed on with
+    // nobody reading it). Relaunching drops that stream; a real fix needs CoreMediaIO to honor the stop.
+    DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+      guard self?.phase == .idle, Recorder.running == 0, Recorder.hardwareStreaming,
+            Recorder.camera?.isInUseByAnotherApplication == false else { return }
+      log("camera still streaming after the disarm with nobody using it; relaunching to release it")
+      exit(1)  // launchd relaunches after a non-zero exit
+    }
   }
 
   // MARK: crash / kill resilience
