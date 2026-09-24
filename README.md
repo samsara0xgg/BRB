@@ -16,6 +16,10 @@ Menu-bar guard for leaving the MacBook on a library or cafe table.
   silent test mode: everything else runs as usual (lock, recording, stages), the speakers stay
   muted.
 - Unlocking the Mac (Touch ID or password) disarms and restores your volume.
+- Phone push (optional, off by default): turn it on under 手机推送 in the menu, subscribe to the
+  copied name in the ntfy app (iPhone or Android, server ntfy.sh), then send the test push. A
+  trigger then pushes the reason and a camera photo at ntfy's top priority. ntfy.sh keeps the photo
+  for 3 hours; the subscription name is the only secret.
 - A crash or kill while armed relaunches and resumes the session. A reboot starts idle.
 
 ## Setup
@@ -46,6 +50,7 @@ Menu-bar guard for leaving the MacBook on a library or cafe table.
 | `camera [s]` | records like an armed session and prints the recording state every second | silent |
 | `record [s]` | raw accelerometer and lid samples as CSV, for tuning offline | silent |
 | `siren [s]` | soft stage, then the siren, then the volume is restored | LOUD |
+| `push` | the menu's test push, with a camera photo, to the subscribed phone (a terminal without camera access sends no photo: `open -n -W build/GuardMode.app --args push`) | silent on the Mac |
 
 The calibration knobs are `MotionDetector` (`tiltLimit`, `shakeLimit`, `sustainFraction`),
 `LidDetector.limit`, and `GuardApp.countdownSeconds` / `softSeconds`.

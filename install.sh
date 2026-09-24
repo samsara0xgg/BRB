@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 app=build/GuardMode.app
 mkdir -p "$app/Contents/MacOS"
 cp Info.plist "$app/Contents/"
-swiftc -O -swift-version 5 main.swift GuardApp.swift Sensors.swift Alarm.swift Recorder.swift InputTap.swift -o "$app/Contents/MacOS/guard-mode"
+swiftc -O -swift-version 5 main.swift GuardApp.swift Sensors.swift Alarm.swift Recorder.swift InputTap.swift Push.swift -o "$app/Contents/MacOS/guard-mode"
 codesign -f -s "Apple Development" "$app"
 launchctl bootout "gui/$(id -u)/com.allen.guard-mode" 2>/dev/null && sleep 2  # bootout is async
 cp com.allen.guard-mode.plist ~/Library/LaunchAgents/

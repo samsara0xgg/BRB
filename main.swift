@@ -17,6 +17,7 @@ case "keys": keysCommand(seconds: seconds ?? 30)
 case "siren": sirenCommand(seconds: seconds ?? 3)
 case "record": recordCommand(seconds: seconds ?? 60)
 case "camera": cameraCommand(seconds: seconds ?? 40)
+case "push": Push.test { exit($0 ? 0 : 1) }; RunLoop.main.run()
 case nil:
   let app = NSApplication.shared
   app.setActivationPolicy(.accessory)
@@ -24,7 +25,7 @@ case nil:
   app.delegate = delegate
   app.run()
 default:
-  print("usage: guard-mode [selftest | sensors [s] | keys [s] | siren [s]]")
+  print("usage: guard-mode [selftest | sensors [s] | keys [s] | siren [s] | record [s] | camera [s] | push]")
   exit(2)
 }
 

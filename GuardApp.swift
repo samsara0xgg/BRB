@@ -201,6 +201,10 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     let locked = GuardApp.lockScreen?() ?? -1
     log("lock screen returned \(locked)")
     soundAlarm(.soft)
+    if Push.enabled {
+      let send = { (photo: Data?) in Push.send(title: "电脑报警了", message: "原因：\(why)", priority: 5, photo: photo) }
+      if let recorder { recorder.snapshot(send) } else { send(nil) }
+    }
     let at = triggeredAt  // a later session's trigger must not be escalated by this one's timers
     DispatchQueue.main.asyncAfter(deadline: .now() + GuardApp.softSeconds) { [weak self] in
       guard let self, phase == .triggered, triggeredAt == at else { return }
@@ -365,6 +369,15 @@ final class GuardApp: NSObject, NSApplicationDelegate {
       choice.tag = Int(v * 100)
       choice.state = abs(Alarm.loudVolume - v) < 0.005 ? .on : .off
     }
+    if phase == .idle {
+      let push = menu.addItem(withTitle: "手机推送：" + (Push.enabled ? "开" : "关"), action: nil, keyEquivalent: "")
+      push.submenu = NSMenu()
+      push.submenu!.addItem(withTitle: Push.enabled ? "关闭手机推送" : "开启手机推送", action: #selector(pushToggled), keyEquivalent: "").target = self
+      if Push.enabled {
+        push.submenu!.addItem(withTitle: "复制订阅名", action: #selector(copyTopic), keyEquivalent: "").target = self
+        push.submenu!.addItem(withTitle: "发送测试推送", action: #selector(testPush), keyEquivalent: "").target = self
+      }
+    }
     if let lastError { menu.addItem(withTitle: "上次失败：" + lastError.replacingOccurrences(of: "\n", with: "；"), action: nil, keyEquivalent: "") }
     menu.addItem(.separator())
     menu.addItem(withTitle: "打开录像文件夹", action: #selector(openFolder), keyEquivalent: "").target = self
@@ -379,6 +392,29 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     log("alarm volume set to \(Alarm.loudVolume)")
     render()
   }
+
+  @objc private func pushToggled() {
+    Push.enabled.toggle()
+    log("push \(Push.enabled ? "on" : "off")")
+    render()
+    guard Push.enabled else { return }
+    Push.copyTopic()
+    NSApp.activate(ignoringOtherApps: true)
+    let alert = NSAlert()
+    alert.messageText = "手机推送已开启"
+    alert.informativeText = """
+      订阅名已复制，iPhone 上可以直接粘贴。
+      1. 手机上安装 ntfy。
+      2. 点 +，粘贴订阅名，订阅（服务器用默认的 ntfy.sh）。
+      3. 回到这里点「手机推送」里的「发送测试推送」。
+
+      报警时会推送原因和一张摄像头照片，照片在 ntfy 的服务器上保留 3 小时。
+      """
+    alert.runModal()
+  }
+
+  @objc private func copyTopic() { Push.copyTopic() }
+  @objc private func testPush() { Push.test() }
 
   @objc private func openFolder() {
     try? FileManager.default.createDirectory(at: Recorder.folder, withIntermediateDirectories: true)
