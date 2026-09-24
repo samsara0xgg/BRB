@@ -8,11 +8,11 @@ import CoreAudio
 final class Alarm {
   enum Level { case soft, loud }
   static let softVolume: Float32 = 0.35
-  /// Full volume, unless a test cap is set (`defaults write com.allen.guard-mode loudVolume -float 0.35`)
-  /// so a live test does not disturb the neighbours. The menu shows when a cap is on.
+  /// The loud stage's volume, chosen in the menu (full when never set). 0 is the silent test mode:
+  /// every stage runs, but the speakers are pinned muted. The soft stage never exceeds it.
   static var loudVolume: Float32 {
-    let cap = UserDefaults.standard.float(forKey: "loudVolume")
-    return cap > 0 && cap < 1 ? cap : 1
+    get { (UserDefaults.standard.object(forKey: "loudVolume") as? NSNumber)?.floatValue ?? 1 }
+    set { UserDefaults.standard.set(newValue, forKey: "loudVolume") }
   }
 
   private let device: AudioDeviceID
@@ -92,8 +92,9 @@ final class Alarm {
   }
 
   private func pin() {
-    Alarm.set(device, kAudioDevicePropertyMute, UInt32(0))
-    Alarm.set(device, kAudioHardwareServiceDeviceProperty_VirtualMainVolume, synth.loud ? Alarm.loudVolume : Alarm.softVolume)
+    let volume = synth.loud ? Alarm.loudVolume : min(Alarm.softVolume, Alarm.loudVolume)
+    Alarm.set(device, kAudioDevicePropertyMute, UInt32(volume == 0 ? 1 : 0))
+    Alarm.set(device, kAudioHardwareServiceDeviceProperty_VirtualMainVolume, volume)
     if !engine.isRunning { try? engine.start() }
   }
 

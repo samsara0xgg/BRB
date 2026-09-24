@@ -107,7 +107,7 @@ func selftest() {
   Recorder.pruneOld()
   check(!FileManager.default.fileExists(atPath: old.path) && FileManager.default.fileExists(atPath: fresh.path), "recordings older than 7 days deleted, newer kept")
   try? FileManager.default.removeItem(at: fresh)
-  print("INFO loud stage volume \(Alarm.loudVolume)" + (Alarm.loudVolume < 1 ? " (test cap on)" : ""))
+  print("INFO alarm volume setting \(Alarm.loudVolume)" + (Alarm.loudVolume == 0 ? " (silent test mode)" : ""))
   let speakers = Alarm.builtInSpeakers()
   check(speakers != nil, "built-in speakers: \(speakers.map { "\(Alarm.name($0)), volume \(Alarm.volume($0))" } ?? "none")")
   check(Recorder.camera != nil, "built-in camera: \(Recorder.camera?.localizedName ?? "none")")

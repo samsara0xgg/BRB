@@ -11,8 +11,10 @@ Menu-bar guard for leaving the MacBook on a library or cafe table.
 - Volume, mute, and brightness keys are yours to use while armed. They pass through and never
   trigger.
 - A trigger swallows the stranger's input, locks the screen, beeps softly for 10 s, then sounds a
-  siren at full volume. The siren plays on the built-in speakers and holds that volume even if
-  you muted them.
+  siren. The siren plays on the built-in speakers and holds its volume even if you muted them.
+- The siren's volume is set in the menu under 报警音量 (full when never set). 静音（测试用） is the
+  silent test mode: everything else runs as usual (lock, recording, stages), the speakers stay
+  muted.
 - Unlocking the Mac (Touch ID or password) disarms and restores your volume.
 - A crash or kill while armed relaunches and resumes the session. A reboot starts idle.
 
@@ -67,6 +69,14 @@ Then the steps that make sound:
 6. Arm, lift the laptop.
 7. Arm, then `kill -9` the process. Expected: launchd relaunches it, still armed.
 
+Not yet run live; steps 8 to 10 work in the silent test mode:
+
+8. On the charger, arm, unplug. Expected: triggers and locks.
+9. Arm, trigger, then `kill -9` the process while it alarms. Expected: it relaunches and alarms
+   again, and unlocking disarms and restores your volume.
+10. Arm, trigger, and leave the lock screen until the display sleeps. Expected: the recording
+    keeps growing (watch the file size in `~/Movies/GuardMode`).
+
 ## Emergency stop
 
 `kill -9` relaunches the app and resumes the alarm (soft, then loud). `bootout` sends SIGTERM,
@@ -82,7 +92,7 @@ launchctl bootout gui/$(id -u)/com.allen.guard-mode
 ## Open questions
 
 - Camera while locked: measured 2026-09-24. The camera kept delivering ~30 frames/s through
-  12 s of lock screen (display on). Recording after the display sleeps is not measured.
+  12 s of lock screen (display on). Recording after the display sleeps is step 10.
 - Do the brightness keys arrive as system-defined key codes 2/3 or as key codes 144/145? Step 1
   shows it.
 - Does the siren play from the speakers with the lid shut?

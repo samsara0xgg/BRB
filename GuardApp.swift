@@ -219,7 +219,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     guard let alarm else { log("alarm impossible: no built-in speakers"); return }
     do {
       try alarm.play(level)
-      log("alarm \(level)" + (level == .loud && Alarm.loudVolume < 1 ? " (test cap \(Alarm.loudVolume))" : ""))
+      log("alarm \(level)" + (Alarm.loudVolume < 1 ? " (volume setting \(Alarm.loudVolume))" : ""))
     } catch {
       log("alarm failed: \(error)")
     }
@@ -357,12 +357,27 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     } else {
       menu.addItem(withTitle: "解锁电脑即可解除", action: nil, keyEquivalent: "")
     }
-    if Alarm.loudVolume < 1 { menu.addItem(withTitle: "测试中：最大音量限制为 \(Int(Alarm.loudVolume * 100))%", action: nil, keyEquivalent: "") }
+    let volume = menu.addItem(withTitle: "报警音量：" + GuardApp.volumeName(Alarm.loudVolume), action: nil, keyEquivalent: "")
+    volume.submenu = NSMenu()
+    for v: Float32 in [0, 0.35, 0.7, 1] {
+      let choice = volume.submenu!.addItem(withTitle: GuardApp.volumeName(v), action: #selector(volumeClicked), keyEquivalent: "")
+      choice.target = self
+      choice.tag = Int(v * 100)
+      choice.state = abs(Alarm.loudVolume - v) < 0.005 ? .on : .off
+    }
     if let lastError { menu.addItem(withTitle: "上次失败：" + lastError.replacingOccurrences(of: "\n", with: "；"), action: nil, keyEquivalent: "") }
     menu.addItem(.separator())
     menu.addItem(withTitle: "打开录像文件夹", action: #selector(openFolder), keyEquivalent: "").target = self
     if phase == .idle { menu.addItem(withTitle: "退出", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q") }
     item.menu = menu
+  }
+
+  static func volumeName(_ v: Float32) -> String { v == 0 ? "静音（测试用）" : "\(Int((v * 100).rounded()))%" }
+
+  @objc private func volumeClicked(_ sender: NSMenuItem) {
+    Alarm.loudVolume = Float32(sender.tag) / 100
+    log("alarm volume set to \(Alarm.loudVolume)")
+    render()
   }
 
   @objc private func openFolder() {
