@@ -15,6 +15,7 @@ case "selftest": selftest()
 case "sensors": sensorsCommand(seconds: seconds ?? 20)
 case "keys": keysCommand(seconds: seconds ?? 30)
 case "siren": sirenCommand(seconds: seconds ?? 3)
+case "record": recordCommand(seconds: seconds ?? 60)
 case nil:
   let app = NSApplication.shared
   app.setActivationPolicy(.accessory)
@@ -48,20 +49,33 @@ func selftest() {
   var bump = still(1000)
   for i in 400..<408 { bump[i].z += 0.3 }  // ~60 ms knock on the table
   check(run(bump) == nil, "60 ms table bump: no trigger")
+  var knock = still(1000)
+  for i in 0..<45 { knock[400 + i].z += 0.85 * exp(-Double(i) / 10) * sin(Double(i) * 1.3) }  // measured-size knock, ringing
+  check(run(knock) == nil, "0.85 g ringing knock: no trigger")
+  var knocks = still(1400)
+  for k in 0..<4 { for i in 0..<45 { knocks[400 + k * 40 + i].z += 0.85 * exp(-Double(i) / 10) * sin(Double(i) * 1.3) } }
+  check(run(knocks) == nil, "four knocks within 1.2 s: no trigger")
+  var nudge = still(1400)
+  for i in 400..<467 { nudge[i].x += 0.2 * sin(.pi * Double(i - 400) / 67) }  // pushed and settled within 0.5 s
+  check(run(nudge) == nil, "0.5 s nudge that settles: no trigger")
   var tilt = still(1000)
   for i in 300..<1000 {
     let a = min(Double(i - 300) / rate, 1) * 15 * .pi / 180  // tilt 15° over 1 s
     tilt[i] = Vec3(x: sin(a), y: 0, z: -cos(a))
   }
-  check(run(tilt) != nil, "15° tilt over 1 s: trigger")
+  for i in 300..<1000 {
+    let a = min(Double(i - 300) / rate, 1) * 20 * .pi / 180  // tilt 20° over 1 s: someone turns it
+    tilt[i] = Vec3(x: sin(a), y: 0, z: -cos(a))
+  }
+  check(run(tilt) != nil, "20° tilt over 1 s: trigger")
   var slow = still(3000)
   for i in 300..<3000 {
-    let a = min(Double(i - 300) / (20 * rate), 1) * 15 * .pi / 180  // tilt 15° over 20 s, too slow to shake
+    let a = min(Double(i - 300) / (20 * rate), 1) * 20 * .pi / 180  // tilt 20° over 20 s, too slow to shake
     slow[i] = Vec3(x: sin(a), y: 0, z: -cos(a))
   }
-  check(run(slow)?.contains("倾斜") == true, "15° tilt over 20 s: trigger by tilt")
+  check(run(slow)?.contains("倾斜") == true, "20° tilt over 20 s: trigger by tilt")
   var carry = still(1000)
-  for i in 300..<1000 { carry[i].z += 0.08 * sin(2 * .pi * 2 * Double(i) / rate) }  // 2 Hz walking sway
+  for i in 300..<1000 { carry[i].z += 0.15 * sin(2 * .pi * 2 * Double(i) / rate) }  // 2 Hz walking sway
   check(run(carry)?.contains("晃动") == true, "carried at 2 Hz: trigger")
   var lid = LidDetector()
   _ = lid.feed(108)
@@ -117,6 +131,20 @@ func sensorsCommand(seconds: Double) {
     peak = 0
     if t >= seconds { exit(0) }
   }
+  RunLoop.main.run()
+}
+
+/// Raw accelerometer and lid samples as CSV on stdout (t, x, y, z in g, lid in degrees), for tuning
+/// the detectors offline against real knocks and lifts.
+func recordCommand(seconds: Double) {
+  let sensors = Sensors()
+  let start = Date()
+  var lidAngle = 0.0
+  print("t,x,y,z,lid")
+  sensors.onLid = { lidAngle = $0 }
+  sensors.onAccel = { a in print(String(format: "%.4f,%.5f,%.5f,%.5f,%.0f", Date().timeIntervalSince(start), a.x, a.y, a.z, lidAngle)) }
+  sensors.start()
+  DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { exit(0) }
   RunLoop.main.run()
 }
 

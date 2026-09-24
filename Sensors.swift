@@ -12,14 +12,16 @@ struct Vec3 {
   }
 }
 
-/// "The laptop is being moved": the resting orientation tilts, or the body keeps shaking
-/// (a carry or a lift), while a single table bump stays too short to count.
+/// "The laptop is being taken": it ends up clearly re-oriented, or it keeps moving for about a
+/// second (lifted and carried). A bump, a knock series or a brief nudge that settles is ignored
+/// on purpose (Allen, 2026-09-24: a short wobble that does not continue is safe).
 /// Knobs are calibrated by hand with `guard-mode sensors`.
 struct MotionDetector {
-  var tiltLimit = 8.0         // degrees away from the orientation captured at arming
-  var shakeLimit = 0.03       // g of acceleration beyond gravity that counts as shaking
-  var sustainFraction = 0.4   // share of the last `window` samples that must shake
-  var window = 60             // ~0.5 s at the sensor's ~125 Hz
+  var tiltLimit = 15.0        // degrees away from the orientation captured at arming
+  var shakeLimit = 0.05       // g of acceleration beyond gravity that counts as moving
+  var sustainFraction = 0.5   // share of the last `window` samples that must move (~1 s)
+  var window = 268            // ~2 s at the sensor's ~134 Hz. Measured 2026-09-24: a single knock
+                              // (0.85 g peak) rings ~0.3 s, two quick knocks tripped a 0.45 s window
   private(set) var gravity: Vec3?
   private var rest: Vec3?
   private var shaking: [Bool] = []
