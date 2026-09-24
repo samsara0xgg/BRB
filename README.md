@@ -77,8 +77,8 @@ launchctl bootout gui/$(id -u)/com.allen.guard-mode
 
 ## Open questions
 
-- Does the camera keep recording while the screen is locked? Watch the log for
-  `camera: ...wasInterrupted`, and check the length of the movie.
+- Camera while locked: measured 2026-09-24. The camera kept delivering ~30 frames/s through
+  12 s of lock screen (display on). Recording after the display sleeps is not measured.
 - Do the brightness keys arrive as system-defined key codes 2/3 or as key codes 144/145? Step 1
   shows it.
 - Does the siren play from the speakers with the lid shut?

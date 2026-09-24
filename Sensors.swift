@@ -93,7 +93,8 @@ final class Sensors {
     guard n >= 3 else { return }
     let s = Unmanaged<Sensors>.fromOpaque(ctx!).takeUnretainedValue()
     s.lidReports += 1
-    s.onLid?(Double(UInt16(r[1]) | UInt16(r[2]) << 8))
+    let raw = Double(UInt16(r[1]) | UInt16(r[2]) << 8)
+    s.onLid?(raw > 180 ? raw - 360 : raw)  // a shut lid reads 359 for -1 (seen live 2026-09-24)
   }
 
   // Accelerometer report: x, y, z as little-endian Int32 at offsets 6, 10, 14, in 1/65536 g.

@@ -201,7 +201,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     }
     // If the lock screen never came up, fall back to Touch ID / password right here.
     DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-      guard let self, !screenLocked else { return }
+      guard let self, phase == .triggered, triggeredAt == at, !screenLocked else { return }
       log("screen did not lock; asking for Touch ID instead")
       authenticate(at)
     }
@@ -212,7 +212,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     guard let alarm else { log("alarm impossible: no built-in speakers"); return }
     do {
       try alarm.play(level)
-      log("alarm \(level)")
+      log("alarm \(level)" + (level == .loud && Alarm.loudVolume < 1 ? " (test cap \(Alarm.loudVolume))" : ""))
     } catch {
       log("alarm failed: \(error)")
     }
@@ -333,6 +333,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     } else {
       menu.addItem(withTitle: "解锁电脑即可解除", action: nil, keyEquivalent: "")
     }
+    if Alarm.loudVolume < 1 { menu.addItem(withTitle: "测试中：最大音量限制为 \(Int(Alarm.loudVolume * 100))%", action: nil, keyEquivalent: "") }
     if let lastError { menu.addItem(withTitle: "上次失败：" + lastError.replacingOccurrences(of: "\n", with: "；"), action: nil, keyEquivalent: "") }
     menu.addItem(.separator())
     menu.addItem(withTitle: "打开录像文件夹", action: #selector(openFolder), keyEquivalent: "").target = self

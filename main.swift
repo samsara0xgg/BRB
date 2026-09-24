@@ -97,6 +97,7 @@ func selftest() {
   check(InputTap.ownerKey(.keyDown, CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true)!) == nil, "letter key counts as input")
   check(InputTap.ownerKey(.keyDown, CGEvent(keyboardEventSource: nil, virtualKey: 145, keyDown: true)!) == "亮度-", "brightness key code 145 passes")
 
+  print("INFO loud stage volume \(Alarm.loudVolume)" + (Alarm.loudVolume < 1 ? " (test cap on)" : ""))
   let speakers = Alarm.builtInSpeakers()
   check(speakers != nil, "built-in speakers: \(speakers.map { "\(Alarm.name($0)), volume \(Alarm.volume($0))" } ?? "none")")
   check(Recorder.camera != nil, "built-in camera: \(Recorder.camera?.localizedName ?? "none")")
