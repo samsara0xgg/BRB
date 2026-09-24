@@ -49,7 +49,8 @@ final class GuardApp: NSObject, NSApplicationDelegate {
       guard let self else { return }
       screenLocked = false
       log("screen unlocked")
-      if phase == .armed || phase == .triggered { disarm("解锁") }
+      // During the countdown too: pressing Touch ID locks the screen, and unlocking means the owner is here.
+      if phase != .idle { disarm("解锁") }
     }
     // `launchctl bootout` and logout end the app on purpose: put the Mac back, then stay down
     // (exit 0; launchd only relaunches after a crash or SIGKILL).
