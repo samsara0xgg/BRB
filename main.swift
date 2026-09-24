@@ -16,6 +16,7 @@ case "sensors": sensorsCommand(seconds: seconds ?? 20)
 case "keys": keysCommand(seconds: seconds ?? 30)
 case "siren": sirenCommand(seconds: seconds ?? 3)
 case "record": recordCommand(seconds: seconds ?? 60)
+case "camera": cameraCommand(seconds: seconds ?? 40)
 case nil:
   let app = NSApplication.shared
   app.setActivationPolicy(.accessory)
@@ -97,6 +98,15 @@ func selftest() {
   check(InputTap.ownerKey(.keyDown, CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true)!) == nil, "letter key counts as input")
   check(InputTap.ownerKey(.keyDown, CGEvent(keyboardEventSource: nil, virtualKey: 145, keyDown: true)!) == "亮度-", "brightness key code 145 passes")
 
+  print("INFO power source: \(GuardApp.onAC() ? "charger" : "battery")")
+  try? FileManager.default.createDirectory(at: Recorder.folder, withIntermediateDirectories: true)
+  let old = Recorder.folder.appendingPathComponent("selftest-old.mov"), fresh = Recorder.folder.appendingPathComponent("selftest-fresh.mov")
+  FileManager.default.createFile(atPath: old.path, contents: Data())
+  FileManager.default.createFile(atPath: fresh.path, contents: Data())
+  try? FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-8 * 86400)], ofItemAtPath: old.path)
+  Recorder.pruneOld()
+  check(!FileManager.default.fileExists(atPath: old.path) && FileManager.default.fileExists(atPath: fresh.path), "recordings older than 7 days deleted, newer kept")
+  try? FileManager.default.removeItem(at: fresh)
   print("INFO loud stage volume \(Alarm.loudVolume)" + (Alarm.loudVolume < 1 ? " (test cap on)" : ""))
   let speakers = Alarm.builtInSpeakers()
   check(speakers != nil, "built-in speakers: \(speakers.map { "\(Alarm.name($0)), volume \(Alarm.volume($0))" } ?? "none")")
@@ -146,6 +156,22 @@ func recordCommand(seconds: Double) {
   sensors.onAccel = { a in print(String(format: "%.4f,%.5f,%.5f,%.5f,%.0f", Date().timeIntervalSince(start), a.x, a.y, a.z, lidAngle)) }
   sensors.start()
   DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { exit(0) }
+  RunLoop.main.run()
+}
+
+/// Records like an armed session and prints the movie output's state every second (silent), to see
+/// what a lid close and reopen does to the recording.
+func cameraCommand(seconds: Double) {
+  let r = Recorder()
+  do { log("recording to \(try r.start().lastPathComponent)") } catch { print("camera failed: \(error)"); exit(1) }
+  let start = Date()
+  Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+    log(r.status)
+    if Date().timeIntervalSince(start) >= seconds {
+      r.stop()
+      DispatchQueue.main.asyncAfter(deadline: .now() + 2) { exit(0) }  // let the finish callback land
+    }
+  }
   RunLoop.main.run()
 }
 

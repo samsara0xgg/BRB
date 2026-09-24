@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import Carbon
+import IOKit.ps
 import LocalAuthentication
 
 struct GuardError: Error, CustomStringConvertible {
@@ -30,6 +31,8 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private var watchdog: Timer?
   private var sigterm: DispatchSourceSignal?
   private var screenLocked = GuardApp.isScreenLocked()
+  private var powerSource: CFRunLoopSource?
+  private var armedOnAC = false
   private var triggeredAt = Date.distantPast
   private var lastError: String?
 
@@ -55,6 +58,8 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     }
     source.resume()
     sigterm = source
+    watchPower()
+    Recorder.pruneOld()
     resume()
   }
 
@@ -79,6 +84,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
       return
     }
     lastError = nil
+    Recorder.pruneOld()
     phase = .arming
     startWatching()
     log("arming, \(Int(GuardApp.countdownSeconds)) s countdown")
@@ -157,8 +163,9 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     }
     motion.baseline()
     lid.baseline()
+    armedOnAC = GuardApp.onAC()
     phase = .armed
-    log("armed; lid at \(lid.rest.map { String(format: "%.0f°", $0) } ?? "-")")
+    log("armed; lid at \(lid.rest.map { String(format: "%.0f°", $0) } ?? "-"), \(armedOnAC ? "on the charger" : "on battery")")
     // The sensor processor can stop streaming (e.g. macOS resets the report interval): re-wake it.
     var seen = s.accelReports
     let dog = Timer(timeInterval: 5, repeats: true) { _ in
@@ -272,6 +279,23 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     var size = MemoryLayout<timeval>.size
     sysctlbyname("kern.boottime", &tv, &size, nil, 0)
     return Date(timeIntervalSince1970: Double(tv.tv_sec))
+  }
+
+  /// Unplugging the charger of an armed Mac is a trigger (a charger is easy to walk off with).
+  private func watchPower() {
+    let me = Unmanaged.passUnretained(self).toOpaque()
+    guard let src = IOPSNotificationCreateRunLoopSource({ ctx in
+      let app = Unmanaged<GuardApp>.fromOpaque(ctx!).takeUnretainedValue()
+      guard app.phase == .armed, app.armedOnAC, !GuardApp.onAC() else { return }
+      app.trigger("拔掉了电源")
+    }, me)?.takeRetainedValue() else { log("power-source notifications unavailable"); return }
+    CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
+    powerSource = src
+  }
+
+  static func onAC() -> Bool {
+    let info = IOPSCopyPowerSourcesInfo().takeRetainedValue()
+    return IOPSGetProvidingPowerSourceType(info)?.takeUnretainedValue() as String? == "AC Power"
   }
 
   static func isScreenLocked() -> Bool {

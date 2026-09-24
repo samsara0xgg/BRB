@@ -45,6 +45,22 @@ final class Recorder: NSObject, AVCaptureFileOutputRecordingDelegate {
     return url
   }
 
+  /// Recordings are kept for 7 days (Allen, 2026-09-24); older ones are deleted at launch and at arming.
+  static func pruneOld(now: Date = Date()) {
+    let cutoff = now.addingTimeInterval(-7 * 86400)
+    let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+    for url in files where url.pathExtension == "mov" {
+      guard let d = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate, d < cutoff else { continue }
+      try? FileManager.default.removeItem(at: url)
+      log("deleted recording older than 7 days: \(url.lastPathComponent)")
+    }
+  }
+
+  var status: String {
+    String(format: "recording=%@ duration=%.1fs suspended=%@", output.isRecording ? "yes" : "no",
+           output.recordedDuration.seconds, (Recorder.camera?.isSuspended ?? false) ? "yes" : "no")
+  }
+
   func stop() {
     active = false
     output.stopRecording()

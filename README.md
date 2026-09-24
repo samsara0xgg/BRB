@@ -3,9 +3,11 @@
 Menu-bar guard for leaving the MacBook on a library or cafe table.
 
 - Arm from the menu-bar dot (gray = off, yellow ring = 5 s countdown, yellow = armed, red = alarm).
-- While armed: the built-in camera records to `~/Movies/GuardMode/`, and the Mac stays awake
-  with the lid shut. These trigger the alarm: the lid angle moving 20 degrees, the laptop tilting
-  or being carried, and any key, click, or trackpad touch.
+- While armed: the built-in camera records to `~/Movies/GuardMode/` (kept 7 days), and the Mac
+  stays awake with the lid shut. These trigger the alarm: the lid angle moving 20 degrees, the
+  laptop turned more than 15 degrees or moving for about a second (a knock or a short nudge does
+  not count), any key, click, or trackpad touch, and unplugging the charger if it was plugged in
+  at arming. A shut lid pauses the recording; it continues in the same file once the lid opens.
 - Volume, mute, and brightness keys are yours to use while armed. They pass through and never
   trigger.
 - A trigger swallows the stranger's input, locks the screen, beeps softly for 10 s, then sounds a
@@ -39,6 +41,8 @@ Menu-bar guard for leaving the MacBook on a library or cafe table.
 | `selftest` | detectors on synthetic data, key classification, hardware present | silent |
 | `sensors [s]` | live lid angle, motion, and detector triggers, for calibrating | silent |
 | `keys [s]` | how each real key or trackpad event is treated (needs Accessibility for the terminal) | silent |
+| `camera [s]` | records like an armed session and prints the recording state every second | silent |
+| `record [s]` | raw accelerometer and lid samples as CSV, for tuning offline | silent |
 | `siren [s]` | soft stage, then the siren, then the volume is restored | LOUD |
 
 The calibration knobs are `MotionDetector` (`tiltLimit`, `shakeLimit`, `sustainFraction`),
