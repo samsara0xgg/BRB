@@ -15,7 +15,12 @@ Menu-bar guard for leaving the MacBook on a library or cafe table.
 - The siren's volume is set in the menu under 报警音量 (full when never set). 静音（测试用） is the
   silent test mode: everything else runs as usual (lock, recording, stages), the speakers stay
   muted.
-- Unlocking the Mac (Touch ID or password) disarms and restores your volume.
+- To disarm, rest a finger on Touch ID (do not press it: a press is the power key and counts as
+  someone at the laptop). Nothing shows on screen; GuardMode holds the keyboard focus while armed
+  and hands it back. A finger that is not yours, tried until macOS gives up, triggers. Unlocking
+  the Mac also disarms, and restores your volume after an alarm.
+- Once the screen is locked (the display slept, or after a trigger), keys and touches no longer
+  trigger, so waking the Mac to unlock it stays silent. Lifting, the lid, and the charger still do.
 - Phone push (optional, off by default): turn it on under 手机推送 in the menu, subscribe to the
   copied name in the ntfy app (iPhone or Android, server ntfy.sh), then send the test push. A
   trigger then pushes the reason and a camera photo at ntfy's top priority. ntfy.sh keeps the photo

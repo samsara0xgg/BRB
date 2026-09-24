@@ -13,7 +13,9 @@ struct GuardError: Error, CustomStringConvertible {
 ///
 /// Armed = camera recording, lid / motion / input watched, Mac kept awake with the lid shut.
 /// A trigger locks the real screen, beeps softly for `softSeconds`, then sirens at full volume.
-/// Unlocking the Mac (Touch ID or password on the lock screen) is the only way to disarm.
+/// Disarm: a finger resting on Touch ID while armed (nothing on screen, see `Fingerprint`), or
+/// unlocking the Mac. While the screen is locked (display slept), keys and touches do not trigger:
+/// nobody can use a locked Mac, and the owner has to wake it to unlock.
 final class GuardApp: NSObject, NSApplicationDelegate {
   enum Phase: String { case idle, arming, armed, triggered }
   static let countdownSeconds = 5.0
@@ -27,6 +29,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private var motion = MotionDetector(), lid = LidDetector()
   private var recorder: Recorder?
   private var tap: InputTap?
+  private let fingerprint = Fingerprint()
   private var alarm: Alarm?
   private var watchdog: Timer?
   private var sigterm: DispatchSourceSignal?
@@ -140,7 +143,12 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     sensors = s
     let t = InputTap()
     // Out of the tap callback: locking the screen and starting audio there would stall all input.
-    t.onInput = { [weak self] what in DispatchQueue.main.async { self?.trigger(what) } }
+    t.onInput = { [weak self] what in
+      DispatchQueue.main.async {
+        guard let self, !self.screenLocked else { return }
+        self.trigger(what)
+      }
+    }
     // Swallow while armed; after a trigger, only until the lock screen is up (or 2 s, if locking failed).
     t.shouldBlock = { [weak self] in
       guard let self, !screenLocked else { return false }
@@ -166,6 +174,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     armedOnAC = GuardApp.onAC()
     phase = .armed
     log("armed; lid at \(lid.rest.map { String(format: "%.0f°", $0) } ?? "-"), \(armedOnAC ? "on the charger" : "on battery")")
+    fingerprint.start(onAccept: { [weak self] in self?.disarm("指纹") }, onReject: { [weak self] why in self?.trigger(why) })
     // The sensor processor can stop streaming (e.g. macOS resets the report interval): re-wake it.
     var seen = s.accelReports
     let dog = Timer(timeInterval: 5, repeats: true) { _ in
@@ -178,6 +187,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   }
 
   private func stopWatching() {
+    fingerprint.stop()
     watchdog?.invalidate()
     watchdog = nil
     sensors?.stop()
@@ -197,6 +207,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     guard phase == .armed else { return }
     triggeredAt = Date()
     phase = .triggered
+    fingerprint.stop(returnFocus: false)  // the lock screen takes over
     log("TRIGGERED: \(why)")
     let locked = GuardApp.lockScreen?() ?? -1
     log("lock screen returned \(locked)")
@@ -359,7 +370,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     if phase == .idle {
       menu.addItem(withTitle: "开启警戒", action: #selector(armClicked), keyEquivalent: "").target = self
     } else {
-      menu.addItem(withTitle: "解锁电脑即可解除", action: nil, keyEquivalent: "")
+      menu.addItem(withTitle: "指纹键上轻放手指即可解除", action: nil, keyEquivalent: "")
     }
     let volume = menu.addItem(withTitle: "报警音量：" + GuardApp.volumeName(Alarm.loudVolume), action: nil, keyEquivalent: "")
     volume.submenu = NSMenu()
