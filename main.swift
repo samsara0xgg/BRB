@@ -149,11 +149,12 @@ func recordCommand(seconds: Double) {
   RunLoop.main.run()
 }
 
-/// Listen-only: prints how each real key / trackpad event would be treated while armed.
+/// Prints how each real key / trackpad event would be treated while armed. Uses the same active
+/// tap as the armed app (so an input method cannot hide from it), but never swallows anything.
 func keysCommand(seconds: Double) {
   let tap = InputTap()
-  guard tap.start(listenOnly: true) else { print("event tap refused: grant Accessibility to this terminal"); exit(1) }
-  tap.onInput = { log("TRIGGER  \($0)") }
+  guard tap.start() else { print("event tap refused: grant Accessibility to this terminal"); exit(1) }
+  tap.onInput = { what in if !what.hasPrefix("触控板") { log("TRIGGER  \(what)") } }
   log("press keys / touch the trackpad; owner keys (volume, mute, brightness) should show nothing")
   DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { exit(0) }
   RunLoop.main.run()
