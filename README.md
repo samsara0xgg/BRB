@@ -86,13 +86,15 @@ Then the steps that make sound:
 6. Arm, lift the laptop.
 7. Arm, then `kill -9` the process. Expected: launchd relaunches it, still armed.
 
-Not yet run live; steps 8 to 10 work in the silent test mode:
+Steps 8 to 11 work in the silent test mode and passed live on 2026-09-24:
 
 8. On the charger, arm, unplug. Expected: triggers and locks.
 9. Arm, trigger, then `kill -9` the process while it alarms. Expected: it relaunches and alarms
-   again, and unlocking disarms and restores your volume.
-10. Arm, trigger, and leave the lock screen until the display sleeps. Expected: the recording
-    keeps growing (watch the file size in `~/Movies/GuardMode`).
+   again, and unlocking disarms and restores your volume. (Live: relaunched in under 1 s, reached
+   the loud stage, the speakers came back to their earlier level.)
+10. Arm, then `pmset displaysleepnow`; lift the laptop; `pmset displaysleepnow` again. Expected: the
+    recording keeps growing through both (live: about 78 MB a minute, frames not frozen).
+11. Arm, rest an unenrolled finger on Touch ID. Expected: triggers.
 
 ## Emergency stop
 
@@ -109,7 +111,7 @@ launchctl bootout gui/$(id -u)/com.allen.guard-mode
 ## Open questions
 
 - Camera while locked: measured 2026-09-24. The camera kept delivering ~30 frames/s through
-  12 s of lock screen (display on). Recording after the display sleeps is step 10.
+  the lock screen, with the display on (12 s) and asleep (step 10).
 - Do the brightness keys arrive as system-defined key codes 2/3 or as key codes 144/145? Step 1
   shows it.
 - Does the siren play from the speakers with the lid shut?
