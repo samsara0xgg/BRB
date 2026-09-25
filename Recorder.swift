@@ -12,6 +12,9 @@ final class Recorder: NSObject, AVCaptureFileOutputRecordingDelegate, AVCaptureV
   private let frames = AVCaptureVideoDataOutput()
   private let frameQueue = DispatchQueue(label: "guard-mode.frames")
   private var wantFrame: ((Data?) -> Void)?  // frameQueue only
+  private var liveFrame: ((Data) -> Void)?  // frameQueue only
+  private var lastLive = 0.0
+  private lazy var images = CIContext()  // frameQueue only
   private var observers: [NSObjectProtocol] = []
   private var active = false
   private var counted = false  // in `running`
@@ -80,11 +83,27 @@ final class Recorder: NSObject, AVCaptureFileOutputRecordingDelegate, AVCaptureV
     }
   }
 
+  /// While set, gets a half-size (640 px) JPEG about 8 times a second, on the frame queue.
+  func setLive(_ handler: ((Data) -> Void)?) {
+    frameQueue.async { self.liveFrame = handler }
+  }
+
   func captureOutput(_ output: AVCaptureOutput, didOutput buffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-    guard let want = wantFrame, let pixels = CMSampleBufferGetImageBuffer(buffer) else { return }
-    wantFrame = nil
-    want(CIContext().jpegRepresentation(of: CIImage(cvPixelBuffer: pixels), colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
-                                        options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: 0.6]))
+    guard let pixels = CMSampleBufferGetImageBuffer(buffer) else { return }
+    if let want = wantFrame {
+      wantFrame = nil
+      want(jpeg(CIImage(cvPixelBuffer: pixels), quality: 0.6))
+    }
+    let now = ProcessInfo.processInfo.systemUptime
+    if let live = liveFrame, now - lastLive >= 0.12 {
+      lastLive = now
+      if let frame = jpeg(CIImage(cvPixelBuffer: pixels).transformed(by: CGAffineTransform(scaleX: 0.5, y: 0.5)), quality: 0.5) { live(frame) }
+    }
+  }
+
+  private func jpeg(_ image: CIImage, quality: CGFloat) -> Data? {
+    images.jpegRepresentation(of: image, colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+                              options: [kCGImageDestinationLossyCompressionQuality as CIImageRepresentationOption: quality])
   }
 
   private func newFile() -> URL {

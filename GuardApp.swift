@@ -30,6 +30,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private var recorder: Recorder?
   private var tap: InputTap?
   private let fingerprint = Fingerprint()
+  private let live = Live()
   private var alarm: Alarm?
   private var watchdog: Timer?
   private var sigterm: DispatchSourceSignal?
@@ -126,6 +127,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     recorder = r
     do {
       log("recording to \(try r.start().path)")
+      live.start(r)
     } catch {
       log("recording failed: \(error)")
     }
@@ -193,6 +195,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     watchdog = nil
     sensors?.stop()
     sensors = nil
+    live.stop()
     tap?.stop()
     tap = nil
     recorder?.stop()
@@ -402,6 +405,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     if let lastError { menu.addItem(withTitle: "上次失败：" + lastError.replacingOccurrences(of: "\n", with: "；"), action: nil, keyEquivalent: "") }
     menu.addItem(.separator())
     menu.addItem(withTitle: "打开录像文件夹", action: #selector(openFolder), keyEquivalent: "").target = self
+    if phase == .idle { menu.addItem(withTitle: "复制实时画面链接（开启警戒时可看）", action: #selector(copyLiveLink), keyEquivalent: "").target = self }
     if phase == .idle { menu.addItem(withTitle: "退出", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q") }
     item.menu = menu
   }
@@ -435,6 +439,11 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   }
 
   @objc private func copyTopic() { Push.copyTopic() }
+
+  @objc private func copyLiveLink() {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(Live.link.absoluteString, forType: .string)
+  }
   @objc private func testPush() { Push.test() }
 
   @objc private func openFolder() {

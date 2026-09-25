@@ -25,6 +25,12 @@ Menu-bar guard for leaving the MacBook on a library or cafe table.
   copied name in the ntfy app (iPhone or Android, server ntfy.sh), then send the test push. A
   trigger then pushes the reason and a camera photo at ntfy's top priority. ntfy.sh keeps the photo
   for 3 hours; the subscription name is the only secret.
+- Live view: while armed (from the countdown on), the camera can be watched in any browser. Tapping
+  the push, or its 看实时画面 button, opens the link; 复制实时画面链接 in the menu copies it.
+  Frames (640x360, about 7.5 a second, about 17 MB a minute) flow only while the page is open, and
+  the page shows how old the last frame is. The link can watch but not pose as the camera. It goes
+  through the relay in `relay/`, a Cloudflare Worker on Allen's account
+  (`guardmode-relay.guardmode-gf1n2.workers.dev`); redeploy with `cd relay && npx wrangler deploy`.
 - A crash or kill while armed relaunches and resumes the session. A reboot starts idle.
 
 ## Setup
@@ -55,6 +61,7 @@ Menu-bar guard for leaving the MacBook on a library or cafe table.
 | `camera [s]` | records like an armed session and prints the recording state every second | silent |
 | `record [s]` | raw accelerometer and lid samples as CSV, for tuning offline | silent |
 | `siren [s]` | soft stage, then the siren, then the volume is restored | LOUD |
+| `live [s]` | camera on and connected to the relay, no recording or guarding; prints the link (run through `open -n -W build/GuardMode.app --args live 60` for the camera grant) | silent |
 | `push` | the menu's test push, with a camera photo, to the subscribed phone (a terminal without camera access sends no photo: `open -n -W build/GuardMode.app --args push`) | silent on the Mac |
 
 The calibration knobs are `MotionDetector` (`tiltLimit`, `shakeLimit`, `sustainFraction`),

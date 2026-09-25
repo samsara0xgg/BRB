@@ -21,9 +21,11 @@ enum Push {
   /// Sends one notification, retrying every 5 s up to 5 times (the Mac may be between networks).
   /// Priority 5 is ntfy's "urgent", which its iPhone app is to turn into a critical alert.
   static func send(title: String, message: String, priority: Int, photo: Data?, attempt: Int = 1, done: ((Bool) -> Void)? = nil) {
+    let link = Live.link.absoluteString  // tapping the notification, or its button, opens the live view
     var url = URLComponents(string: "https://ntfy.sh/" + topic)!
     url.queryItems = [.init(name: "title", value: title), .init(name: "message", value: message), .init(name: "priority", value: String(priority))]
     if priority >= 5 { url.queryItems!.append(.init(name: "tags", value: "rotating_light")) }
+    url.queryItems! += [.init(name: "click", value: link), .init(name: "actions", value: "view, 看实时画面, \(link)")]
     if photo != nil { url.queryItems!.append(.init(name: "filename", value: "guardmode.jpg")) }
     var request = URLRequest(url: url.url!, timeoutInterval: 15)
     request.httpMethod = "PUT"
@@ -52,7 +54,7 @@ enum Push {
     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {  // let the exposure settle
       camera.snapshot { photo in
         camera.stop()
-        send(title: "GuardMode 测试推送", message: "收到这条，报警时就会推送到这台手机。", priority: 3, photo: photo, done: done)
+        send(title: "GuardMode 测试推送", message: "收到这条，报警时就会推送到这台手机。点开可以看实时画面（开启警戒时才有）。", priority: 3, photo: photo, done: done)
       }
     }
   }

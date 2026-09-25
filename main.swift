@@ -18,6 +18,7 @@ case "siren": sirenCommand(seconds: seconds ?? 3)
 case "record": recordCommand(seconds: seconds ?? 60)
 case "camera": cameraCommand(seconds: seconds ?? 40)
 case "push": Push.test { exit($0 ? 0 : 1) }; RunLoop.main.run()
+case "live": liveCommand(seconds: seconds ?? 60)
 case nil:
   let app = NSApplication.shared
   app.setActivationPolicy(.accessory)
@@ -25,7 +26,7 @@ case nil:
   app.delegate = delegate
   app.run()
 default:
-  print("usage: guard-mode [selftest | sensors [s] | keys [s] | siren [s] | record [s] | camera [s] | push]")
+  print("usage: guard-mode [selftest | sensors [s] | keys [s] | siren [s] | record [s] | camera [s] | push | live [s]]")
   exit(2)
 }
 
@@ -185,6 +186,22 @@ func keysCommand(seconds: Double) {
   tap.onInput = { what in if !what.hasPrefix("触控板") { log("TRIGGER  \(what)") } }
   log("press keys / touch the trackpad; owner keys (volume, mute, brightness) should show nothing")
   DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { exit(0) }
+  RunLoop.main.run()
+}
+
+/// Camera on and connected to the relay for `seconds`, as while armed, without recording or
+/// guarding: prints the link and the viewer count, for checking the live view (silent).
+func liveCommand(seconds: Double) {
+  let camera = Recorder()
+  do { try camera.startCamera() } catch { print("camera failed: \(error)"); exit(1) }
+  let live = Live()
+  live.start(camera)
+  log("live view at \(Live.link.absoluteString)")
+  DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
+    live.stop()
+    camera.stop()
+    exit(0)
+  }
   RunLoop.main.run()
 }
 
