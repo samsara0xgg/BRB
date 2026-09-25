@@ -2,10 +2,10 @@ import AppKit
 import LocalAuthentication
 import LocalAuthenticationEmbeddedUI
 
-/// Disarms with a finger resting on Touch ID while armed, with nothing on screen: an invisible
+/// Disarms with a finger resting on Touch ID from the countdown on, with nothing on screen: an invisible
 /// window holds the embedded Touch ID view instead of the system dialog. Measured 2026-09-24: the
 /// finger only reaches a context whose view sits in the key window of the active app, so GuardMode
-/// takes focus while armed and hands it back after.
+/// takes focus from the countdown on and hands it back after.
 final class Fingerprint {
   private final class KeyWindow: NSWindow {
     override var canBecomeKey: Bool { true }
@@ -67,7 +67,10 @@ final class Fingerprint {
           let code = (error as? LAError)?.code
           log("fingerprint: \(error?.localizedDescription ?? "-")")
           switch code {
-          case .authenticationFailed, .biometryLockout: self.onReject("指纹不对")
+          case .authenticationFailed, .biometryLockout:
+            self.onReject("指纹不对")
+            // Still running = the reject was ignored (countdown): listen again, unless Touch ID is locked out.
+            if code == .authenticationFailed, ctx === self.context { self.evaluate() }
           case .biometryNotAvailable, .biometryNotEnrolled: break  // unlocking the Mac still disarms
           default:  // canceled by the system (focus lost): ask again; a locked screen disarms on unlock instead
             guard !GuardApp.isScreenLocked() else { return }

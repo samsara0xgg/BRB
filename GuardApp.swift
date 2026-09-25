@@ -13,7 +13,7 @@ struct GuardError: Error, CustomStringConvertible {
 ///
 /// Armed = camera recording, lid / motion / input watched, Mac kept awake with the lid shut.
 /// A trigger locks the real screen, beeps softly for `softSeconds`, then sirens at full volume.
-/// Disarm: a finger resting on Touch ID while armed (nothing on screen, see `Fingerprint`), or
+/// Disarm: a finger resting on Touch ID, from the countdown on (nothing on screen, see `Fingerprint`), or
 /// unlocking the Mac. While the screen is locked (display slept), keys and touches do not trigger:
 /// nobody can use a locked Mac, and the owner has to wake it to unlock.
 final class GuardApp: NSObject, NSApplicationDelegate {
@@ -163,6 +163,8 @@ final class GuardApp: NSObject, NSApplicationDelegate {
       exit(1)  // launchd relaunches
     }
     tap = t
+    // From the countdown on, so the owner's finger cancels it. A wrong finger only triggers once armed.
+    fingerprint.start(onAccept: { [weak self] in self?.disarm("指纹") }, onReject: { [weak self] why in self?.trigger(why) })
   }
 
   /// Captures the resting lid angle and orientation, or gives up when the sensors are silent.
@@ -177,7 +179,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     armedOnAC = GuardApp.onAC()
     phase = .armed
     log("armed; lid at \(lid.rest.map { String(format: "%.0f°", $0) } ?? "-"), \(armedOnAC ? "on the charger" : "on battery")")
-    fingerprint.start(onAccept: { [weak self] in self?.disarm("指纹") }, onReject: { [weak self] why in self?.trigger(why) })
     // The sensor processor can stop streaming (e.g. macOS resets the report interval): re-wake it.
     var seen = s.accelReports
     let dog = Timer(timeInterval: 5, repeats: true) { _ in

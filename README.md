@@ -16,9 +16,10 @@ Menu-bar guard for leaving the MacBook on a library or cafe table.
   silent test mode: everything else runs as usual (lock, recording, stages), the speakers stay
   muted.
 - To disarm, rest a finger on Touch ID, or press it (seen live: the finger is read before the press
-  locks the screen). Nothing shows on screen; GuardMode holds the keyboard focus while armed and
-  hands it back. A finger that is not yours, tried until macOS gives up, triggers. Unlocking
-  the Mac also disarms, and restores your volume after an alarm.
+  locks the screen). This works from the countdown on, so a finger during the countdown cancels
+  it. Nothing shows on screen; GuardMode holds the keyboard focus from the countdown on and hands
+  it back. A finger that is not yours, tried until macOS gives up, triggers once armed (during the
+  countdown it is ignored). Unlocking the Mac also disarms, and restores your volume after an alarm.
 - Once the screen is locked (the display slept, or after a trigger), keys and touches no longer
   trigger, so waking the Mac to unlock it stays silent. Lifting, the lid, and the charger still do.
 - Phone push (optional, off by default): turn it on under 手机推送 in the menu, subscribe to the
@@ -86,7 +87,7 @@ Then the steps that make sound:
 6. Arm, lift the laptop.
 7. Arm, then `kill -9` the process. Expected: launchd relaunches it, still armed.
 
-Steps 8 to 11 work in the silent test mode and passed live on 2026-09-24:
+Steps 8 to 12 work in the silent test mode; 8 to 11 passed live on 2026-09-24:
 
 8. On the charger, arm, unplug. Expected: triggers and locks.
 9. Arm, trigger, then `kill -9` the process while it alarms. Expected: it relaunches and alarms
@@ -95,6 +96,8 @@ Steps 8 to 11 work in the silent test mode and passed live on 2026-09-24:
 10. Arm, then `pmset displaysleepnow`; lift the laptop; `pmset displaysleepnow` again. Expected: the
     recording keeps growing through both (live: about 78 MB a minute, frames not frozen).
 11. Arm, rest an unenrolled finger on Touch ID. Expected: triggers.
+12. Arm, and during the countdown rest your finger on Touch ID, or lock the screen and unlock it.
+    Expected: disarms, never reaches armed. (The lock-and-unlock case passed live.)
 
 ## Emergency stop
 
