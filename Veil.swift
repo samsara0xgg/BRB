@@ -824,12 +824,16 @@ private struct Chip: View {
     .padding(.horizontal, 18)
     .frame(height: 40)
     .background {
-      ZStack {
-        Capsule().fill(.ultraThinMaterial)
-        Capsule().fill(dark ? Color(red: 22 / 255, green: 26 / 255, blue: 38 / 255).opacity(0.58) : Color.white.opacity(0.1))
+      if dark {  // on the bare desktop after the fog clears: it brings its own blur
+        ZStack {
+          Capsule().fill(.ultraThinMaterial)
+          Capsule().fill(Color(red: 22 / 255, green: 26 / 255, blue: 38 / 255).opacity(0.58))
+        }
+      } else {  // on the frost, which is already blurred: a light wash, as in design A
+        Capsule().fill(Color.white.opacity(0.1))
       }
     }
-    .overlay(Capsule().strokeBorder(.white.opacity(0.26), lineWidth: 0.5))
+    .overlay(Capsule().strokeBorder(LinearGradient(colors: [.white.opacity(0.34), .white.opacity(0.2)], startPoint: .top, endPoint: .bottom), lineWidth: 0.5))
     .fixedSize()
   }
 
@@ -853,7 +857,10 @@ private struct Chip: View {
   }
 }
 
-/// Liquid Glass on macOS 26; on macOS 14 and 15, a thin material with the same highlight rim.
+/// Liquid Glass on macOS 26; on macOS 14 and 15, a thin material with the same highlight rim. Over
+/// the frost the glass is the clear kind, lit by design A's white (or red) wash, so the sign reads as
+/// a brighter lens on the fog rather than a dark pill. Welcome back sits on the bare desktop and
+/// keeps the regular glass, which blurs what is behind it.
 private struct GlassCapsule: ViewModifier {
   enum Look { case clear, alarm, dark }
   let look: Look
@@ -863,7 +870,8 @@ private struct GlassCapsule: ViewModifier {
     #if compiler(>=6.2)
     if #available(macOS 26, *) {
       content
-        .glassEffect(.regular.tint(tint), in: Capsule())
+        .background(Capsule().fill(LinearGradient(colors: fill, startPoint: .top, endPoint: .bottom)))
+        .glassEffect(look == .dark ? Glass.regular : Glass.clear, in: Capsule())
         .overlay(Capsule().strokeBorder(rimGradient, lineWidth: rim - 0.5))
     } else {
       frosted(content)
@@ -871,14 +879,6 @@ private struct GlassCapsule: ViewModifier {
     #else
     frosted(content)
     #endif
-  }
-
-  private var tint: Color? {
-    switch look {
-    case .clear: nil
-    case .alarm: Color(red: 1, green: 0.38, blue: 0.4).opacity(0.42)
-    case .dark: Color(red: 34 / 255, green: 39 / 255, blue: 54 / 255).opacity(0.66)
-    }
   }
 
   private var fill: [Color] {

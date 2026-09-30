@@ -348,17 +348,26 @@ func snapshotCommand(_ what: String, out: String?) {
     let p = PanelModel()
     p.refresh()
     if what == "notready" { p.page = .notReady }
+    p.recent = [alarmed, quiet]
+    p.clips = 2
     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-      p.recent = [alarmed, quiet]
-      p.clips = 2
       if what == "panel" { p.checks = p.checks.map { Check(id: $0.id, title: $0.title, detail: $0.detail, ok: true, optional: $0.optional, quiet: $0.quiet) } }
+      if what == "notready" {  // one thing to fix, whatever this Mac has
+        p.checks = p.checks.map { $0.id == .sleep ? Check(id: .sleep, title: $0.title, detail: L("Needs an admin rule, installed once from Terminal"), ok: false) : $0 }
+      }
     }
     let host = NSHostingController(rootView: PanelView(model: p))
     host.sizingOptions = .preferredContentSize
     let w = NSWindow(contentViewController: host)
     w.styleMask = [.titled, .fullSizeContentView]
     w.titlebarAppearsTransparent = true
-    w.center()
+    w.titleVisibility = .hidden
+    for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] { w.standardWindowButton(b)?.isHidden = true }
+    let pin = {  // where the popover hangs, under the menu bar, again once the checks change its height
+      if let area = NSScreen.main?.visibleFrame { w.setFrameTopLeftPoint(NSPoint(x: area.maxX - w.frame.width - 160, y: area.maxY - 6)) }
+    }
+    pin()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: pin)
     w.makeKeyAndOrderFront(nil)
     app.activate(ignoringOtherApps: true)
     panel = p
