@@ -5,15 +5,23 @@ import AppKit
 /// is reported through `onInput`, and swallowed while `shouldBlock()` says so, so a stranger's first
 /// keystroke never lands in an open terminal.
 final class InputTap {
-  var onInput: (String) -> Void = { _ in }
+  /// One event that counts as someone at the laptop.
+  struct Input {
+    let kind: Trigger       // .keyboard, .trackpad or .powerKey
+    let what: String        // for the log
+    let keyCode: Int64?
+    let location: CGPoint   // the pointer, in global display coordinates (top-left origin)
+  }
+
+  var onInput: (Input) -> Void = { _ in }
   var shouldBlock: () -> Bool = { false }
   private var tap: CFMachPort?
   private var source: CFRunLoopSource?
 
   // NX_SYSDEFINED subtype 8 = media/brightness keys; key codes from IOKit's ev_keymap.h.
-  private static let ownerKeys: [Int: String] = [0: "音量+", 1: "音量-", 2: "亮度+", 3: "亮度-", 7: "静音"]
+  private static let ownerKeys: [Int: String] = [0: "volume up", 1: "volume down", 2: "brightness up", 3: "brightness down", 7: "mute"]
   // Some keyboards send these as plain key codes instead.
-  private static let ownerKeyCodes: [Int64: String] = [72: "音量+", 73: "音量-", 74: "静音", 144: "亮度+", 145: "亮度-"]
+  private static let ownerKeyCodes: [Int64: String] = [72: "volume up", 73: "volume down", 74: "mute", 144: "brightness up", 145: "brightness down"]
   private static let systemDefined: UInt32 = 14
   private static let types: [UInt32] = [1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 14, 18, 19, 20, 22, 25, 26, 27, 29, 30, 31, 32, 34]
 
@@ -43,11 +51,11 @@ final class InputTap {
   /// Name of the owner key this event is, or nil when it is ordinary input.
   static func ownerKey(_ type: CGEventType, _ event: CGEvent) -> String? {
     if type.rawValue == systemDefined {
-      guard let ns = NSEvent(cgEvent: event) else { return "系统事件" }
+      guard let ns = NSEvent(cgEvent: event) else { return "system event" }
       switch ns.subtype.rawValue {
       case 8: return ownerKeys[(ns.data1 & 0xFFFF_0000) >> 16]  // media / brightness keys
       case 1: return nil  // power / Touch ID key pressed: someone is at the laptop
-      default: return "系统事件"  // not a key press
+      default: return "system event"  // not a key press
       }
     }
     if type == .keyDown || type == .keyUp {
@@ -56,15 +64,37 @@ final class InputTap {
     return nil
   }
 
-  static func describe(_ type: CGEventType, _ event: CGEvent) -> String {
+  static func input(_ type: CGEventType, _ event: CGEvent) -> Input {
+    var code: Int64?
+    let kind: Trigger, what: String
     switch type {
-    case .keyDown, .keyUp: return "按键 \(event.getIntegerValueField(.keyboardEventKeycode))"
-    case .flagsChanged: return "修饰键"
-    case .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged: return "触控板移动"
-    case .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp: return "点击"
-    case .scrollWheel: return "滚动"
-    default: return type.rawValue == systemDefined ? "系统按键（媒体键或电源键）" : "触控板手势 \(type.rawValue)"
+    case .keyDown, .keyUp:
+      code = event.getIntegerValueField(.keyboardEventKeycode)
+      kind = .keyboard
+      what = "key \(code ?? -1)"
+    case .flagsChanged:
+      kind = .keyboard
+      what = "modifier key"
+    case .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged:
+      kind = .trackpad
+      what = "trackpad move"
+    case .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp:
+      kind = .trackpad
+      what = "click"
+    case .scrollWheel:
+      kind = .trackpad
+      what = "scroll"
+    default:
+      if type.rawValue == systemDefined {
+        let power = NSEvent(cgEvent: event)?.subtype.rawValue == 1
+        kind = power ? .powerKey : .keyboard
+        what = power ? "power key" : "media key"
+      } else {
+        kind = .trackpad
+        what = "trackpad gesture \(type.rawValue)"
+      }
     }
+    return Input(kind: kind, what: what, keyCode: code, location: event.location)
   }
 
   private func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -73,7 +103,7 @@ final class InputTap {
       return Unmanaged.passUnretained(event)
     }
     if InputTap.ownerKey(type, event) != nil { return Unmanaged.passUnretained(event) }
-    onInput(InputTap.describe(type, event))
+    onInput(InputTap.input(type, event))
     return shouldBlock() ? nil : Unmanaged.passUnretained(event)
   }
 }

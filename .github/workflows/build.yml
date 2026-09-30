@@ -1,0 +1,27 @@
+name: Build
+
+# macOS minutes cost ten times Linux minutes on a private repo: pull requests, main and by hand only.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  mac:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: swift --version
+      - name: Build the app
+        run: SIGN_IDENTITY=- ./build.sh
+      - name: Check Info.plist and the strings
+        run: |
+          plutil -lint Info.plist Resources/*.lproj/*.strings
+          python3 scripts/check-strings.py
+      - name: Selftest without hardware
+        run: build/GuardMode.app/Contents/MacOS/guard-mode selftest --no-hardware
+      - name: Check the relay's syntax
+        run: cp relay/worker.js "$RUNNER_TEMP/worker.mjs" && node --check "$RUNNER_TEMP/worker.mjs"

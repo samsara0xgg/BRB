@@ -1,6 +1,7 @@
 import AVFoundation
 import AudioToolbox
 import CoreAudio
+import os
 
 /// Plays straight to the built-in speakers (not the system output, so AirPods or a Multi-Output
 /// Device cannot swallow it) and pins their volume and mute every half second, so whatever the
@@ -8,11 +9,23 @@ import CoreAudio
 final class Alarm {
   enum Level { case soft, loud }
   static let softVolume: Float32 = 0.35
-  /// The loud stage's volume, chosen in the menu (full when never set). 0 is the silent test mode:
-  /// every stage runs, but the speakers are pinned muted. The soft stage never exceeds it.
+  /// The loud stage's volume, 10 to 100 % in the panel (full when never set). The soft stage never
+  /// exceeds it.
   static var loudVolume: Float32 {
-    get { (UserDefaults.standard.object(forKey: "loudVolume") as? NSNumber)?.floatValue ?? 1 }
-    set { UserDefaults.standard.set(newValue, forKey: "loudVolume") }
+    get { min(1, max(0.1, (UserDefaults.standard.object(forKey: "loudVolume") as? NSNumber)?.floatValue ?? 1)) }
+    set { UserDefaults.standard.set(min(1, max(0.1, newValue)), forKey: "loudVolume") }
+  }
+
+  /// Test mode: every stage runs, but the speakers are pinned muted (audit H1: no longer a volume of 0
+  /// that is easy to forget).
+  static var silent = false
+
+  /// Volume 0 used to be the silent test setting: it becomes test mode for the next run, and 70 %.
+  static func migrate() {
+    guard let v = (UserDefaults.standard.object(forKey: "loudVolume") as? NSNumber)?.floatValue, v == 0 else { return }
+    loudVolume = 0.7
+    Prefs.testMode = true
+    log("alarm volume 0 (the old silent setting) migrated to test mode and 70 %")
   }
 
   private let device: AudioDeviceID
@@ -46,6 +59,7 @@ final class Alarm {
       let rate = format.sampleRate
       let node = AVAudioSourceNode { [synth] _, _, frames, list in
         let buffers = UnsafeMutableAudioBufferListPointer(list)
+        synth.beginBuffer()
         for i in 0..<Int(frames) {
           let v = synth.next(rate: rate)
           for b in buffers { b.mData!.assumingMemoryBound(to: Float.self)[i] = v }
@@ -92,13 +106,14 @@ final class Alarm {
   }
 
   private func pin() {
-    let volume = synth.loud ? Alarm.loudVolume : min(Alarm.softVolume, Alarm.loudVolume)
+    let volume = Alarm.silent ? 0 : synth.loud ? Alarm.loudVolume : min(Alarm.softVolume, Alarm.loudVolume)
     Alarm.set(device, kAudioDevicePropertyMute, UInt32(volume == 0 ? 1 : 0))
     Alarm.set(device, kAudioHardwareServiceDeviceProperty_VirtualMainVolume, volume)
     if !engine.isRunning { try? engine.start() }
   }
 
-  /// The built-in output device ("MacBook Pro Speakers"), whatever the current system output is.
+  /// The built-in output device ("MacBook Pro Speakers"), whatever the current system output is. By
+  /// its UID, then its data source, then its English name (audit M7: the name is localized).
   static func builtInSpeakers() -> AudioDeviceID? {
     var address = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
     var size: UInt32 = 0
@@ -111,11 +126,22 @@ final class Alarm {
       AudioObjectGetPropertyDataSize($0, &a, 0, nil, &n)
       return n > 0 && get($0, kAudioDevicePropertyTransportType, UInt32(0), scope: kAudioObjectPropertyScopeGlobal) == kAudioDeviceTransportTypeBuiltIn
     }
-    return outputs.first { name($0).contains("Speakers") } ?? outputs.first
+    return outputs.first { uid($0) == "BuiltInSpeakerDevice" }
+      ?? outputs.first { get($0, kAudioDevicePropertyDataSource, UInt32(0)) == 0x6973_706B }  // 'ispk'
+      ?? outputs.first { name($0).contains("Speakers") }
+      ?? outputs.first
+  }
+
+  static func uid(_ d: AudioDeviceID) -> String {
+    string(d, kAudioDevicePropertyDeviceUID)
   }
 
   static func name(_ d: AudioDeviceID) -> String {
-    var a = AudioObjectPropertyAddress(mSelector: kAudioObjectPropertyName, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+    string(d, kAudioObjectPropertyName)
+  }
+
+  private static func string(_ d: AudioDeviceID, _ selector: AudioObjectPropertySelector) -> String {
+    var a = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
     var n: Unmanaged<CFString>?
     var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
     guard AudioObjectGetPropertyData(d, &a, 0, nil, &size, &n) == noErr, let n else { return "?" }
@@ -140,14 +166,27 @@ final class Alarm {
 }
 
 /// Soft: a short 880 Hz beep every second. Loud: a 650-1250 Hz wailing siren, overdriven for bite.
-final class Synth {
-  var loud = false
+final class Synth: @unchecked Sendable {
+  private let level = OSAllocatedUnfairLock(initialState: false)
+  // The render thread's own.
+  private var loudNow = false
   private var phase = 0.0, t = 0.0
+
+  /// Set on the main thread, read by the render thread (audit L4).
+  var loud: Bool {
+    get { level.withLock { $0 } }
+    set { level.withLock { $0 = newValue } }
+  }
+
+  /// Once per render buffer: never waits on the lock, keeps the last level when it is busy.
+  func beginBuffer() {
+    if let v = level.withLockIfAvailable({ $0 }) { loudNow = v }
+  }
 
   func next(rate: Double) -> Float {
     t += 1 / rate
     let freq: Double, gain: Double
-    if loud {
+    if loudNow {
       let sweep = abs((t / 1.2).truncatingRemainder(dividingBy: 1) * 2 - 1)  // triangle 0...1, 1.2 s period
       freq = 650 + 600 * sweep
       gain = 1

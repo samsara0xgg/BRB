@@ -1,0 +1,2 @@
+/* Chinese (Simplified) for Info.plist. */
+"NSCameraUsageDescription" = "只在有人碰这台电脑时录像：报警前 10 秒和之后的画面。路过不会被录下。";

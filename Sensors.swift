@@ -2,6 +2,27 @@ import Foundation
 import IOKit
 import IOKit.hid
 
+/// What set the alarm off (audit H3).
+enum Trigger: String, Codable, CaseIterable {
+  case lifted, tilted, lidClosed, lidMoved, charger, powerKey, keyboard, trackpad, finger, restarted
+
+  /// Looks like someone walking off with the Mac, or about to force it off: the siren starts at once.
+  /// A key, a touch or a finger can be someone curious, and gets the soft stage first (the owner's
+  /// chance to cancel a false alarm).
+  var sirenAtOnce: Bool {
+    switch self {
+    case .keyboard, .trackpad, .finger: false
+    default: true
+    }
+  }
+}
+
+/// A detector's decision: what happened, and the measured detail for the log.
+struct Hit {
+  let kind: Trigger
+  let detail: String
+}
+
 struct Vec3 {
   var x, y, z: Double
   static func - (a: Vec3, b: Vec3) -> Vec3 { Vec3(x: a.x - b.x, y: a.y - b.y, z: a.z - b.z) }
@@ -15,33 +36,53 @@ struct Vec3 {
 /// "The laptop is being taken": it ends up clearly re-oriented, or it keeps moving for about a
 /// second (lifted and carried). A bump, a knock series or a brief nudge that settles is ignored
 /// on purpose (Allen, 2026-09-24: a short wobble that does not continue is safe).
-/// Knobs are calibrated by hand with `guard-mode sensors`.
+/// Knobs are calibrated by hand with `guard-mode sensors`; `Place` adjusts them per setting.
 struct MotionDetector {
   var tiltLimit = 15.0        // degrees away from the orientation captured at arming
   var shakeLimit = 0.05       // g of acceleration beyond gravity that counts as moving
   var sustainFraction = 0.5   // share of the last `window` samples that must move (~1 s)
   var window = 268            // ~2 s at the sensor's ~134 Hz. Measured 2026-09-24: a single knock
                               // (0.85 g peak) rings ~0.3 s, two quick knocks tripped a 0.45 s window
+  var detectsShaking = true   // off on the go: only tilt counts then
+  var bumpLimit = 0.08        // g beyond gravity that counts as a bump, for the welcome-back summary
+  private let calmSamples = 402  // ~3 s: a jolt after this much calm is a new bump
   private(set) var gravity: Vec3?
   private var rest: Vec3?
   private var shaking: [Bool] = []
+  /// Jolts that did not trigger since arming: a knock on the table, a bag set down next to it.
+  private(set) var bumps = 0
+  private var calm = 0
 
   /// Captures the current orientation as "at rest"; call once the laptop has settled.
-  mutating func baseline() { rest = gravity; shaking.removeAll() }
+  mutating func baseline() {
+    rest = gravity
+    shaking.removeAll()
+    bumps = 0
+    calm = calmSamples
+  }
 
-  /// Feeds one sample in g; returns a reason once the laptop counts as moved.
-  mutating func feed(_ a: Vec3) -> String? {
+  /// Feeds one sample in g; returns a hit once the laptop counts as moved.
+  mutating func feed(_ a: Vec3) -> Hit? {
     guard let g = gravity else { gravity = a; return nil }
     let dynamic = (a - g).length
     // Slow low-pass (~1.5 s): a short knock barely moves it, so it cannot linger as fake shaking.
     gravity = Vec3(x: g.x + 0.005 * (a.x - g.x), y: g.y + 0.005 * (a.y - g.y), z: g.z + 0.005 * (a.z - g.z))
     guard let rest else { return nil }
+    if dynamic > bumpLimit {
+      if calm >= calmSamples && detectsShaking { bumps += 1 }
+      calm = 0
+    } else {
+      calm += 1
+    }
     shaking.append(dynamic > shakeLimit)
     if shaking.count > window { shaking.removeFirst() }
     let tilt = gravity!.degrees(to: rest)
-    if tilt > tiltLimit { return String(format: "电脑被倾斜 %.0f°", tilt) }
+    if tilt > tiltLimit { return Hit(kind: .tilted, detail: String(format: "tilted %.0f°", tilt)) }
+    guard detectsShaking else { return nil }
     let share = Double(shaking.filter { $0 }.count) / Double(window)
-    if share >= sustainFraction { return String(format: "电脑在持续晃动（%.0f%% 采样超过 %.2fg）", share * 100, shakeLimit) }
+    if share >= sustainFraction {
+      return Hit(kind: .lifted, detail: String(format: "moving (%.0f%% of samples beyond %.2fg)", share * 100, shakeLimit))
+    }
     return nil
   }
 }
@@ -52,10 +93,10 @@ struct LidDetector {
   private(set) var rest: Double?
   private(set) var last: Double?
   mutating func baseline() { rest = last }
-  mutating func feed(_ angle: Double) -> String? {
+  mutating func feed(_ angle: Double) -> Hit? {
     last = angle
     guard let rest, abs(rest - angle) >= limit else { return nil }
-    return String(format: "屏幕开合角度 %.0f° → %.0f°", rest, angle)
+    return Hit(kind: angle < rest ? .lidClosed : .lidMoved, detail: String(format: "lid %.0f° → %.0f°", rest, angle))
   }
 }
 
@@ -113,6 +154,9 @@ final class Sensors {
     IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
     onAccel = nil
     onLid = nil
+    // Closed and unscheduled above, so no report can land in them any more (audit L3).
+    buffers.forEach { $0.deallocate() }
+    buffers.removeAll()
   }
 
   func wake() {
