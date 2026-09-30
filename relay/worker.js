@@ -309,7 +309,7 @@ const PAGE = `<!doctype html>
   .photos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .photos a { display: block; aspect-ratio: 4 / 3; border-radius: 14px; overflow: hidden; background: #000; border: 1px solid var(--rim); }
   .photos img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  ol.timeline { list-style: none; margin: 0; padding: 4px 18px; }
+  ol.timeline { list-style: none; margin: -6px 0; padding: 0; }
   ol.timeline li { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, .07); }
   ol.timeline li:last-child { border-bottom: 0; }
   ol.timeline time { color: var(--faint); font-variant-numeric: tabular-nums; min-width: 3.6em; }
@@ -343,7 +343,7 @@ const PAGE = `<!doctype html>
     offlineSince: (t) => "电脑 " + t + " 起离线：可能断网了，或者合上了盖子",
     live: "实时", stale: (s) => s + " 秒前的画面", waiting: "等画面…", noCamera: "这次没有开摄像头",
     siren: "警笛在响", soft: "已锁屏，10 秒后响警笛", testSilent: "测试 · 不出声", recording: "正在录像",
-    photos: "照片", timeline: "经过", lastAlarm: "上次报警",
+    photos: "照片", timeline: "经过", lastAlarm: "上次报警：", then: "。",
     places: { library: "图书馆", cafe: "咖啡馆", transit: "路上" },
     headline: { lifted: "电脑被拿起来了", tilted: "电脑被挪动了", lidClosed: "屏幕被合上了", lidMoved: "屏幕被掰动了", charger: "电源被拔掉了", powerKey: "有人按了电源键", keyboard: "有人碰了键盘", trackpad: "有人碰了触控板", finger: "有人试了指纹", restarted: "程序重启后继续报警" },
     event: { armed: "开始警戒", photo: "拍了一张照片", siren: "警笛响了", warning: "运动传感器停了", cancelled: "取消了" },
@@ -358,7 +358,7 @@ const PAGE = `<!doctype html>
     offlineSince: (t) => "The Mac has been offline since " + t + ": no network, or the lid is shut",
     live: "LIVE", stale: (s) => "Picture from " + s + " s ago", waiting: "Waiting for the picture…", noCamera: "The camera is off this time",
     siren: "The siren is sounding", soft: "Screen locked, siren in 10 s", testSilent: "Test · silent", recording: "Recording",
-    photos: "Photos", timeline: "What happened", lastAlarm: "Last alarm",
+    photos: "Photos", timeline: "What happened", lastAlarm: "Last alarm: ", then: ". ",
     places: { library: "Library", cafe: "Café", transit: "On the go" },
     headline: { lifted: "Your Mac was picked up", tilted: "Your Mac was moved", lidClosed: "The lid was closed", lidMoved: "The lid was moved", charger: "The charger was unplugged", powerKey: "The power button was pressed", keyboard: "Someone touched the keyboard", trackpad: "Someone touched the trackpad", finger: "Someone tried a fingerprint", restarted: "The alarm resumed after a restart" },
     event: { armed: "Guarding started", photo: "Took a photo", siren: "The siren started", warning: "The motion sensor stopped", cancelled: "Cancelled" },
@@ -426,9 +426,9 @@ const PAGE = `<!doctype html>
       pill.textContent = T.off;
       title = T.notGuarding;
       const last = [...(s?.events ?? [])].reverse().find((e) => e.e === "triggered");
-      if (last && v.level !== "status") sub = T.lastAlarm + ": " + (T.headline[last.k] ?? T.alarm) + " · " + when(last.t);
+      if (last && v.level !== "status") sub = T.lastAlarm + (T.headline[last.k] ?? T.alarm) + " · " + when(last.t);
     }
-    if (v?.level === "status") sub = (sub ? sub + ". " : "") + T.onlyStatus;
+    if (v?.level === "status") sub = (sub ? sub + T.then : "") + T.onlyStatus;
     if (v && !v.online && v.offlineAt && phase !== "idle" && v.level !== "reset" && v.level !== "expired") sub = T.offlineSince(when(v.offlineAt));
     if (v && !v.online && phase !== "idle" && pill.className !== "pill alarm") { pill.textContent = T.offline; pill.className = "pill"; }
     $("title").textContent = title;
