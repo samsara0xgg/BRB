@@ -6,7 +6,7 @@
   <key>ProgramArguments</key>
   <array><string>/Users/alllllenshi/Projects/guard-mode/build/GuardMode.app/Contents/MacOS/guard-mode</string></array>
   <key>RunAtLoad</key><true/>
-  <!-- Relaunch after a crash or kill (a kill while armed resumes the alarm); "退出" exits 0 and stays down. -->
+  <!-- Relaunch after a crash or kill (a kill while armed resumes the alarm); Quit exits 0 and stays down. -->
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>ProcessType</key><string>Interactive</string>
   <key>StandardOutPath</key><string>/Users/alllllenshi/Library/Logs/guard-mode.log</string>
