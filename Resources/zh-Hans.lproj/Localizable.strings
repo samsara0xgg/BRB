@@ -1,0 +1,175 @@
+/* Chinese (Simplified). The keys are the English copy in the Swift sources; scripts/check-strings.py keeps the two in step. */
+
+/* Veil.swift */
+"Guard Mode starts in %ld s" = "%ld 秒后开始警戒";
+"Alarm raised" = "已报警";
+"Please don't touch. This Mac is guarded." = "请勿触碰，这台电脑正在警戒。";
+"Please don't touch" = "请勿触碰";
+"This Mac is guarded. Touching it sounds the alarm." = "这台电脑正在警戒，碰它会报警";
+"You're on camera. The owner has been notified." = "画面已录下，机主已收到通知";
+"You're on camera." = "画面已录下";
+"The owner has been notified." = "机主已收到通知";
+"Please put it back." = "请放回原处";
+"Walking by isn't recorded. Touching it is." = "路过不会被录下，碰它才会录像";
+"Not recording this time" = "这次不会录像";
+"Recording" = "正在录像";
+"Walk away. Guard Mode starts in %ld s" = "离开吧，%ld 秒后开始警戒";
+"cancels · or rest a finger on Touch ID" = "取消 · 或把手指轻放在指纹键上";
+"Test mode: this run stays silent" = "测试模式：这次不出声";
+/* The notice's footer is in the other language, for whoever does not read this one. */
+"PLEASE DO NOT TOUCH · PASSING BY IS NOT RECORDED" = "PLEASE DO NOT TOUCH · PASSING BY IS NOT RECORDED";
+"Test · silent" = "测试 · 不出声";
+
+/* Panel.swift */
+"Accessibility" = "辅助功能";
+"Notices the keyboard and trackpad" = "能发现有人碰键盘和触控板";
+"Needed to notice the keyboard and trackpad" = "靠它发现有人碰键盘和触控板";
+"Camera" = "摄像头";
+"No built-in camera found" = "找不到内置摄像头";
+"No built-in camera: an alarm won't be recorded" = "没有内置摄像头：报警时不会录像";
+"Films only around an alarm" = "只在报警前后录像";
+"Allow it so an alarm can be recorded" = "允许后，报警时才能录像";
+"Turned off for GuardMode in System Settings" = "系统设置里关掉了 GuardMode 的摄像头权限";
+"Stay awake with the lid shut" = "合盖不睡眠";
+"Keeps guarding with the lid closed" = "合上盖子也继续警戒";
+"Needs an admin rule, installed once from Terminal" = "需要在终端里装一次管理员规则";
+"Speakers" = "喇叭";
+"The siren plays on the built-in speakers" = "警笛从电脑自带的喇叭播放";
+"No built-in speakers found" = "找不到电脑自带的喇叭";
+"Touch ID" = "触控 ID";
+"Rest a finger to stop guarding" = "手指轻放即可解除";
+"Unlock the Mac to stop guarding instead" = "改用解锁电脑来解除";
+"Phone alerts" = "手机提醒";
+"On" = "开";
+"Off: alarms stay on this Mac" = "关：报警只在电脑上";
+"Secure keyboard entry" = "安全键盘输入";
+"A password field or Terminal's Secure Keyboard Entry is on, so keys would slip past. Close it first." = "有密码框或终端的「安全键盘输入」开着，按键会绕过警戒。先关掉它。";
+"Lock screen" = "锁屏";
+"The system's lock function is unavailable" = "系统的锁屏功能不可用";
+"Off" = "关";
+"Phone page" = "手机页面";
+"After an alarm only" = "报警后才能看";
+"Recordings" = "录像";
+"Only around alarms · %ld" = "只录报警前后 · %ld";
+"Quit Guard Mode" = "退出警戒模式";
+"Ready" = "就绪";
+"Not ready" = "未就绪";
+"Checking…" = "检查中…";
+"Ready · %ld checks passed" = "就绪 · %ld 项检查通过";
+"1 thing to fix" = "还有 1 项要处理";
+"%ld things to fix" = "还有 %ld 项要处理";
+"Starting…" = "即将开始…";
+"Guarding" = "警戒中";
+"Start guarding" = "开始警戒";
+"Starts in 5 s · leave it lying still" = "5 秒后开始 · 放着别动";
+"See what's missing first" = "先看看还缺什么";
+"Note on the screen, e.g. Back in 10 min" = "屏幕上的留言，比如：10 分钟回来";
+"Siren volume" = "警笛音量";
+"Place" = "场景";
+"Test mode" = "测试模式";
+"Next run stays silent, then turns itself off" = "下一次不出声，之后自动关闭";
+"Frosted screen" = "磨砂屏幕";
+"Shows the notice on every screen while guarding" = "警戒时每块屏幕都显示提示";
+"Quiet table: a firm nudge or a lift sounds the alarm" = "安静的桌子：推一下或拿起来就报警";
+"Busy table: bumps are ignored, carrying it is not" = "热闹的桌子：轻碰不算，拿走才算";
+"Moving vehicle: only tilt, the lid, the charger and touch count" = "车上：只看倾斜、屏幕、电源和触碰";
+"Recent" = "最近";
+"This Mac is guarded" = "这台电脑正在警戒";
+"Rest a finger on Touch ID, or unlock the Mac, to stop" = "手指放在触控 ID 上，或解锁电脑，即可停止";
+"Before guarding" = "开始警戒之前";
+"Guard Mode starts once everything marked below is fixed." = "处理好下面标出的项目，就能开始警戒。";
+"Check again" = "重新检查";
+"optional" = "可选";
+"Open Settings" = "打开设置";
+"Allow" = "允许";
+"Copied" = "已复制";
+"Copy command" = "复制命令";
+"Set up" = "设置";
+"Send alerts to my phone" = "报警时通知手机";
+"An alarm sends what happened and a photo" = "报警时发送经过和一张照片";
+"Install the free ntfy app" = "安装免费的 ntfy App";
+"Scan this code, or paste the topic under + in ntfy" = "扫这个码，或在 ntfy 里点 + 粘贴订阅名";
+"Send a test below" = "在下面发一条测试";
+"Copy topic" = "复制订阅名";
+"Sent. Check your phone." = "已发送，看看手机。";
+"Couldn't send. Check the network." = "没发出去，检查一下网络。";
+"Send a test" = "发送测试";
+"Alerts go through ntfy.sh. The topic name is the only key, and photos are kept there for 3 hours." = "提醒经过 ntfy.sh。订阅名是唯一的钥匙，照片在那里保留 3 小时。";
+"Open this on your phone and keep it." = "在手机上打开并收藏它。";
+"Before an alarm it only shows whether this Mac is guarded. After one it shows the camera, the photos and what happened." = "报警前只显示电脑是否在警戒。报警后能看到画面、照片和经过。";
+"The page can only watch. It can't control this Mac." = "这个页面只能看，不能控制电脑。";
+"Copy link" = "复制链接";
+"Tap again: the old link stops working" = "再点一次：旧链接会失效";
+"Reset link" = "重置链接";
+
+/* GuardApp.swift */
+"The motion sensor stopped. The lid, the charger and touch still count." = "运动传感器停了。合盖、拔电源和触碰仍会报警。";
+"Disarm Guard Mode" = "解除警戒模式";
+"Guard Mode is off" = "警戒模式已关闭";
+
+/* Push.swift */
+"%@ · Siren on" = "%@ · 警笛已响";
+"%@ · Screen locked, siren in 10 s" = "%@ · 已锁屏，10 秒后响警笛";
+"The siren is sounding" = "警笛响了";
+"It's been 10 s and nobody has disarmed it" = "已经响了 10 秒，还没有人解除";
+"Disarmed" = "已解除";
+"%@ · %@" = "%@ · %@";
+"Guard Mode needs a look" = "Guard Mode 需要你看一下";
+"Test: %@" = "测试：%@";
+"Watch live" = "看实时画面";
+"Guard Mode test" = "Guard Mode 测试";
+"If you see this, alarms will reach this phone." = "收到这条，报警时就会推送到这台手机。";
+
+/* History.swift */
+"Ignored 1 bump" = "忽略了 1 次轻碰";
+"Ignored %ld bumps" = "忽略了 %ld 次轻碰";
+"%@, nobody touched it" = "%@，没人碰过";
+"Welcome back" = "欢迎回来";
+"%@. Nobody touched it." = "%@，没人碰过它。";
+"All quiet" = "一切安静";
+"Nothing was recorded" = "没有录像";
+"1 photo sent to your phone" = "1 张照片已发到手机";
+"%ld photos sent to your phone" = "%ld 张照片已发到手机";
+"Saved a recording on this Mac" = "录像已存在这台电脑上";
+"Test mode: stayed silent" = "测试模式：没有出声";
+"The siren sounded for %ld s" = "警笛响了 %ld 秒";
+"Only the soft beeps played" = "只响了提示音";
+
+/* L10n.swift */
+"Today %@" = "今天 %@";
+"Yesterday %@" = "昨天 %@";
+"Away under a minute" = "离开不到 1 分钟";
+"Away %ld min" = "离开 %ld 分钟";
+"Away %ld h %ld min" = "离开 %ld 小时 %ld 分钟";
+"Your Mac was picked up" = "电脑被拿起来了";
+"Your Mac was moved" = "电脑被挪动了";
+"The lid was closed" = "屏幕被合上了";
+"The lid was moved" = "屏幕被掰动了";
+"The charger was unplugged" = "电源被拔掉了";
+"The power button was pressed" = "有人按了电源键";
+"Someone touched the keyboard" = "有人碰了键盘";
+"Someone touched the trackpad" = "有人碰了触控板";
+"Someone tried a fingerprint" = "有人试了指纹";
+"The alarm resumed after a restart" = "程序重启后继续报警";
+"At %@, someone picked up your Mac" = "%@ 有人拿起了电脑";
+"At %@, someone moved your Mac" = "%@ 有人挪动了电脑";
+"At %@, someone closed the lid" = "%@ 有人合上了屏幕";
+"At %@, someone moved the lid" = "%@ 有人掰动了屏幕";
+"At %@, someone unplugged the charger" = "%@ 有人拔掉了电源";
+"At %@, someone pressed the power button" = "%@ 有人按了电源键";
+"At %@, someone touched the keyboard" = "%@ 有人碰了键盘";
+"At %@, someone touched the trackpad" = "%@ 有人碰了触控板";
+"At %@, someone tried a fingerprint" = "%@ 有人试了指纹";
+"At %@, the alarm resumed after a restart" = "%@ 程序重启后继续报警";
+"Disarmed with Touch ID" = "用指纹解除";
+"Disarmed by unlocking" = "解锁后解除";
+"Disarmed with Touch ID or password" = "用指纹或密码解除";
+"Cancelled" = "已取消";
+"Guard Mode was stopped" = "警戒模式被停止";
+"Stopped: the sensors sent no data" = "已停止：传感器没有数据";
+"Restarted to watch the keyboard" = "为了监听键盘而重启";
+
+/* Prefs.swift */
+"Library" = "图书馆";
+"Café" = "咖啡馆";
+"On the go" = "路上";

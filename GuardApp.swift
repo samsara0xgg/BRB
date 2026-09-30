@@ -1,6 +1,4 @@
 import AppKit
-import AVFoundation
-import Carbon
 import IOKit.ps
 import LocalAuthentication
 
@@ -9,22 +7,43 @@ struct GuardError: Error, CustomStringConvertible {
   init(_ d: String) { description = d }
 }
 
-/// Menu-bar dot: gray idle, yellow ring while counting down, yellow armed, red triggered.
+extension Trigger {
+  /// Where the red starts on the notice's screen, in unit coordinates from the top-left: the
+  /// keyboard below the screen, the lid's hinge at its top, Touch ID bottom-right, MagSafe left.
+  /// A trackpad touch starts at the pointer instead.
+  var floodOrigin: CGPoint {
+    switch self {
+    case .keyboard, .trackpad: CGPoint(x: 0.5, y: 1.02)
+    case .lidClosed, .lidMoved: CGPoint(x: 0.5, y: 0)
+    case .lifted, .tilted, .restarted: CGPoint(x: 0.5, y: 0.5)
+    case .charger: CGPoint(x: 0, y: 0.85)
+    case .finger, .powerKey: CGPoint(x: 1, y: 1.02)
+    }
+  }
+}
+
+/// The menu-bar shield and everything behind it.
 ///
-/// Armed = camera recording, lid / motion / input watched, Mac kept awake with the lid shut.
-/// A trigger locks the real screen, beeps softly for `softSeconds`, then sirens at full volume.
-/// Disarm: a finger resting on Touch ID, from the countdown on (nothing on screen, see `Fingerprint`), or
-/// unlocking the Mac. While the screen is locked (display slept), keys and touches do not trigger:
-/// nobody can use a locked Mac, and the owner has to wake it to unlock.
+/// Armed = the frosted screen up, the camera buffering the last 10 s in memory, lid / motion / input
+/// watched, the Mac kept awake with the lid shut. A trigger floods the screen red, locks it, and
+/// saves the recording; the siren starts at once for anything that looks like the Mac being taken
+/// (lifted, the lid, the charger, the power button), after 10 soft seconds for a key, a touch or a
+/// wrong finger. Disarm: a finger resting on Touch ID, from the countdown on, or unlocking the Mac.
+/// While the screen is locked (display slept), keys and touches do not trigger: nobody can use a
+/// locked Mac, and the owner has to wake it to unlock.
 final class GuardApp: NSObject, NSApplicationDelegate {
   enum Phase: String { case idle, arming, armed, triggered }
   static let countdownSeconds = 5.0
   static let softSeconds = 10.0
   static let supportDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/GuardMode")
   static let stateFile = supportDir.appendingPathComponent("phase")
+  /// pmset calls in order, off the main thread (audit L5).
+  static let pmsetQueue = DispatchQueue(label: "guard-mode.pmset")
 
   private var phase = Phase.idle { didSet { persist(); render() } }
   private lazy var item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+  private let panel = Panel()
+  private let veil = Veil()
   private var sensors: Sensors?
   private var motion = MotionDetector(), lid = LidDetector()
   private var recorder: Recorder?
@@ -33,164 +52,253 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private let live = Live()
   private var alarm: Alarm?
   private var watchdog: Timer?
+  private var ticker: Timer?
   private var sigterm: DispatchSourceSignal?
   private var screenLocked = GuardApp.isScreenLocked()
   private var powerSource: CFRunLoopSource?
+  private var pendingPower: DispatchWorkItem?
+  // This session.
+  private var test = false
+  private var armedAt = Date()
+  private var progress = 0.0
   private var armedOnAC = false
+  private var degraded = false
+  private var trigger: Trigger?
   private var triggeredAt = Date.distantPast
-  private var lastError: String?
+  private var softFrom: Date?
+  private var sirenFrom: Date?
+  private var clip: URL?
+  private var photos = 0
+  private var latestPhoto: Data?
 
   func applicationDidFinishLaunching(_ note: Notification) {
+    Alarm.migrate()
     let dnc = DistributedNotificationCenter.default()
     dnc.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
-      self?.screenLocked = true
+      guard let self else { return }
+      screenLocked = true
+      veil.model.locked = true
       log("screen locked")
     }
     dnc.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in
       guard let self else { return }
       screenLocked = false
+      veil.model.locked = false
       log("screen unlocked")
       // During the countdown too: pressing Touch ID locks the screen, and unlocking means the owner is here.
-      if phase != .idle { disarm("解锁") }
+      if phase != .idle { disarm(.unlock) }
     }
     // `launchctl bootout` and logout end the app on purpose: put the Mac back, then stay down
     // (exit 0; launchd only relaunches after a crash or SIGKILL).
     signal(SIGTERM, SIG_IGN)
     let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
     source.setEventHandler { [weak self] in
-      self?.disarm("SIGTERM")
+      self?.disarm(.stopped, exiting: true)
       exit(0)
     }
     source.resume()
     sigterm = source
+    item.button?.target = self
+    item.button?.action = #selector(statusClicked)
+    item.button?.setAccessibilityLabel("Guard Mode")
+    panel.model.onArm = { [weak self] in self?.arm() }
+    veil.onRebuild = { [weak self] in self?.listenForFinger() }
     watchPower()
-    Recorder.pruneOld()
+    Recorder.prune()
+    render()
     resume()
   }
 
+  /// Quitting while armed would leave the Mac unguarded without anyone noticing (audit M1).
+  func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    guard phase == .idle else {
+      log("quit refused while \(phase.rawValue)")
+      return .terminateCancel
+    }
+    return .terminateNow
+  }
+
   func applicationWillTerminate(_ note: Notification) {
-    if phase != .idle { disarm("退出") }
+    if phase != .idle { disarm(.stopped, exiting: true) }
+  }
+
+  @objc private func statusClicked() {
+    guard let button = item.button else { return }
+    panel.toggle(from: button)
   }
 
   // MARK: arming
 
-  @objc private func armClicked() {
-    do {
-      try preflight()
-    } catch {
-      lastError = "\(error)"
-      render()
-      log("arm refused: \(error)")
-      NSApp.activate(ignoringOtherApps: true)
-      let alert = NSAlert()
-      alert.messageText = "警戒模式没有开启"
-      alert.informativeText = "\(error)"
-      alert.runModal()
-      return
-    }
-    lastError = nil
-    Recorder.pruneOld()
+  private func arm() {
+    guard phase == .idle else { return }
+    test = Prefs.testMode
+    Alarm.silent = test
+    armedAt = Date()
+    progress = 0
+    degraded = false
+    trigger = nil
+    softFrom = nil
+    sirenFrom = nil
+    clip = nil
+    photos = 0
+    latestPhoto = nil
+    Recorder.prune()
     phase = .arming
+    setSleepDisabled(true)
     startWatching()
-    log("arming, \(Int(GuardApp.countdownSeconds)) s countdown")
-    DispatchQueue.main.asyncAfter(deadline: .now() + GuardApp.countdownSeconds) { [weak self] in
-      guard let self, phase == .arming else { return }
-      finishArming()
+    let seconds = GuardApp.countdownSeconds
+    if Prefs.veil {
+      veil.countdown(Int(seconds))
     }
-  }
-
-  /// Everything arming needs; throws a message naming each missing piece.
-  private func preflight() throws {
-    var missing: [String] = []
-    if !AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary) {
-      missing.append("辅助功能权限：系统设置 → 隐私与安全性 → 辅助功能，打开 GuardMode，然后再点一次")
+    listenForFinger()
+    log("arming, \(Int(seconds)) s countdown\(test ? ", test mode" : ""), \(Prefs.place.rawValue)")
+    let start = Date()
+    let t = Timer(timeInterval: 0.1, repeats: true) { [weak self] timer in
+      guard let self, phase == .arming else { timer.invalidate(); return }
+      let elapsed = Date().timeIntervalSince(start)
+      let remaining = max(1, Int((seconds - elapsed).rounded(.up)))
+      if veil.model.remaining != remaining { veil.model.remaining = remaining }
+      progress = min(1, elapsed / seconds)
+      render()
+      if elapsed >= seconds {
+        timer.invalidate()
+        finishArming()
+      }
     }
-    if IsSecureEventInputEnabled() {
-      missing.append("有程序开着安全输入（密码框，或终端的「安全键盘输入」），键盘按键会绕过警戒：先关掉")
-    }
-    switch AVCaptureDevice.authorizationStatus(for: .video) {
-    case .authorized: break
-    case .notDetermined:
-      AVCaptureDevice.requestAccess(for: .video) { _ in }
-      missing.append("摄像头权限：已弹出请求，允许后再点一次")
-    default: missing.append("摄像头权限被拒：系统设置 → 隐私与安全性 → 摄像头，打开 GuardMode")
-    }
-    if Recorder.camera == nil { missing.append("找不到内置摄像头") }
-    if Alarm.builtInSpeakers() == nil { missing.append("找不到 Mac 自带喇叭") }
-    if GuardApp.lockScreen == nil { missing.append("系统锁屏功能不可用") }
-    if missing.isEmpty && !setSleepDisabled(true) { missing.append("合盖不睡眠的管理员规则没装：见 README 第 1 步") }
-    if !missing.isEmpty { throw GuardError(missing.joined(separator: "\n")) }
+    RunLoop.main.add(t, forMode: .common)
+    ticker = t
   }
 
   private func startWatching() {
     let r = Recorder()
-    recorder = r
     do {
-      log("recording to \(try r.start().path)")
-      live.start(r)
+      try r.start()
+      recorder = r
     } catch {
-      log("recording failed: \(error)")
+      log("camera failed, guarding without it: \(error)")  // the notice says "Not recording this time"
     }
+    let m = veil.model
+    m.test = test
+    m.note = Prefs.note
+    m.armedAt = armedAt
+    m.recording = recorder != nil
+    m.pushOn = Push.enabled
+    m.locked = screenLocked
+    live.start(recorder, state: LiveState(phase: phase.rawValue, since: LiveState.ms(armedAt), place: Prefs.place.rawValue, note: Prefs.note,
+                                          push: Push.enabled, test: test, camera: recorder != nil))
     let s = Sensors()
     s.onAccel = { [weak self] a in
-      guard let self, let why = motion.feed(a) else { return }
-      trigger(why)
+      guard let self, let hit = motion.feed(a) else { return }
+      fire(hit.kind, hit.detail)
     }
     s.onLid = { [weak self] angle in
-      guard let self, let why = lid.feed(angle) else { return }
-      trigger(why)
+      guard let self, let hit = lid.feed(angle) else { return }
+      fire(hit.kind, hit.detail)
     }
-    motion = MotionDetector()
+    motion = Prefs.place.motionDetector()
     lid = LidDetector()
     s.start()
     sensors = s
     let t = InputTap()
     // Out of the tap callback: locking the screen and starting audio there would stall all input.
-    t.onInput = { [weak self] what in
-      DispatchQueue.main.async {
-        guard let self, !self.screenLocked else { return }
-        self.trigger(what)
-      }
+    t.onInput = { [weak self] input in
+      DispatchQueue.main.async { self?.handle(input) }
     }
-    // Swallow while armed; after a trigger, only until the lock screen is up (or 2 s, if locking failed).
+    // Swallow while armed; after a trigger, until the lock screen is up (or the fallback dialog is).
     t.shouldBlock = { [weak self] in
       guard let self, !screenLocked else { return false }
-      return phase == .armed || (phase == .triggered && Date().timeIntervalSince(triggeredAt) < 2)
+      return phase == .armed || (phase == .triggered && Date().timeIntervalSince(triggeredAt) < 3.2)
     }
     if !t.start() {
       log("event tap failed although Accessibility is granted; restarting so the grant takes effect")
-      disarm("event tap failed")
+      disarm(.tapFailed)
       exit(1)  // launchd relaunches
     }
     tap = t
-    // From the countdown on, so the owner's finger cancels it. A wrong finger only triggers once armed.
-    fingerprint.start(onAccept: { [weak self] in self?.disarm("指纹") }, onReject: { [weak self] why in self?.trigger(why) })
+  }
+
+  /// From the countdown on, so the owner's finger cancels it. A wrong finger only triggers once armed.
+  private func listenForFinger() {
+    guard phase == .arming || phase == .armed else { return }
+    fingerprint.stop(returnFocus: false)
+    fingerprint.start(in: veil.isUp ? veil.host : nil,
+                      onAccept: { [weak self] in self?.disarm(.fingerprint) },
+                      onReject: { [weak self] in self?.fire(.finger, "fingerprint not recognized") })
+  }
+
+  private func handle(_ input: InputTap.Input) {
+    guard !screenLocked else { return }
+    if phase == .arming {
+      if input.keyCode == 53 { disarm(.escape) }  // esc, as the countdown says
+      return
+    }
+    guard phase == .armed else { return }
+    if input.kind == .powerKey {
+      // Touch ID sits on the power key: give a resting finger 400 ms to disarm before the press counts.
+      guard pendingPower == nil else { return }
+      let work = DispatchWorkItem { [weak self] in
+        self?.pendingPower = nil
+        self?.fire(.powerKey, input.what)
+      }
+      pendingPower = work
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+      return
+    }
+    fire(input.kind, input.what, pointer: input.kind == .trackpad ? input.location : nil)
   }
 
   /// Captures the resting lid angle and orientation, or gives up when the sensors are silent.
-  private func finishArming(then: (() -> Void)? = nil) {
+  private func finishArming(resumed: Bool = false) {
     guard let s = sensors, s.accelReports > 0, s.lidReports > 0 else {
-      lastError = "传感器没有数据（加速度 \(sensors?.accelReports ?? 0)，开合角度 \(sensors?.lidReports ?? 0)）"
-      disarm("sensors silent")
+      log("sensors silent: accelerometer \(sensors?.accelReports ?? 0), lid \(sensors?.lidReports ?? 0) reports")
+      disarm(.sensorsSilent)
       return
     }
     motion.baseline()
     lid.baseline()
     armedOnAC = GuardApp.onAC()
     phase = .armed
+    veil.armed()
+    live.update { $0.phase = "armed" }
+    live.event("armed", Prefs.place.rawValue)
     log("armed; lid at \(lid.rest.map { String(format: "%.0f°", $0) } ?? "-"), \(armedOnAC ? "on the charger" : "on battery")")
-    // The sensor processor can stop streaming (e.g. macOS resets the report interval): re-wake it.
+    // The sensor processor can stop streaming (e.g. macOS resets the report interval): re-wake it,
+    // and say so when it stays silent (audit H4: the shield goes half, the phone is told).
     var seen = s.accelReports
-    let dog = Timer(timeInterval: 5, repeats: true) { _ in
-      if s.accelReports == seen { log("accelerometer silent for 5 s; waking the sensors again"); s.wake() }
+    var silentSince: Date?
+    let dog = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+      guard let self else { return }
+      if s.accelReports == seen {
+        log("accelerometer silent for 5 s; waking the sensors again")
+        s.wake()
+        let since = silentSince ?? Date().addingTimeInterval(-5)
+        silentSince = since
+        if !degraded && Date().timeIntervalSince(since) >= 15 {
+          degraded = true
+          render()
+          live.event("warning", "motion")
+          if Push.enabled { Push.warning(L("The motion sensor stopped. The lid, the charger and touch still count."), test: test) }
+        }
+      } else if silentSince != nil {
+        silentSince = nil
+        if degraded {
+          degraded = false
+          render()
+          log("accelerometer back")
+        }
+      }
       seen = s.accelReports
     }
     RunLoop.main.add(dog, forMode: .common)
     watchdog = dog
-    then?()
+    if resumed { fire(.restarted, "the app was ended while alarming and relaunched") }
   }
 
-  private func stopWatching() {
+  private func stopWatching(exiting: Bool) {
+    ticker?.invalidate()
+    ticker = nil
+    pendingPower?.cancel()
+    pendingPower = nil
     fingerprint.stop()
     watchdog?.invalidate()
     watchdog = nil
@@ -203,35 +311,89 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     recorder = nil
     alarm?.stop()
     alarm = nil
-    setSleepDisabled(false)
+    Alarm.silent = false
+    setSleepDisabled(false, wait: exiting)
   }
 
   // MARK: trigger / disarm
 
-  private func trigger(_ why: String) {
+  private func fire(_ kind: Trigger, _ detail: String, pointer: CGPoint? = nil) {
     guard phase == .armed else { return }
-    triggeredAt = Date()
+    pendingPower?.cancel()
+    pendingPower = nil
+    let at = Date()  // a later session's trigger must not be escalated by this one's timers
+    triggeredAt = at
+    trigger = kind
     phase = .triggered
+    log("TRIGGERED: \(kind.rawValue), \(detail)")
     fingerprint.stop(returnFocus: false)  // the lock screen takes over
-    log("TRIGGERED: \(why)")
-    let locked = GuardApp.lockScreen?() ?? -1
-    log("lock screen returned \(locked)")
-    soundAlarm(.soft)
-    if Push.enabled {
-      let send = { (photo: Data?) in Push.send(title: "电脑报警了", message: "原因：\(why)", priority: 5, photo: photo) }
-      if let recorder { recorder.snapshot(send) } else { send(nil) }
-    }
-    let at = triggeredAt  // a later session's trigger must not be escalated by this one's timers
-    DispatchQueue.main.asyncAfter(deadline: .now() + GuardApp.softSeconds) { [weak self] in
+    veil.model.pushOn = Push.enabled
+    veil.alarm(pointer: pointer, origin: kind.floodOrigin)
+
+    // The red spreads first, so whoever touched it sees why; the tap swallows input meanwhile.
+    DispatchQueue.main.asyncAfter(deadline: .now() + (veil.isUp ? 1.2 : 0)) { [weak self] in
       guard let self, phase == .triggered, triggeredAt == at else { return }
+      log("lock screen returned \(GuardApp.lockScreen?() ?? -1)")
+      // If the lock screen never came up, fall back to Touch ID / password right here.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+        guard let self, phase == .triggered, triggeredAt == at, !screenLocked else { return }
+        log("screen did not lock; asking for Touch ID instead")
+        veil.close()  // the system dialog has to be visible
+        authenticate(at)
+      }
+    }
+
+    if kind.sirenAtOnce {
+      sirenFrom = at
       soundAlarm(.loud)
+    } else {
+      softFrom = at
+      soundAlarm(.soft)
+      DispatchQueue.main.asyncAfter(deadline: .now() + GuardApp.softSeconds) { [weak self] in
+        guard let self, phase == .triggered, triggeredAt == at else { return }
+        sirenFrom = Date()
+        soundAlarm(.loud)
+        live.update { $0.siren = true }
+        live.event("siren")
+        if Push.enabled { Push.siren(test: test, link: live.alarmLink, photo: latestPhoto) }
+      }
     }
-    // If the lock screen never came up, fall back to Touch ID / password right here.
-    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-      guard let self, phase == .triggered, triggeredAt == at, !screenLocked else { return }
-      log("screen did not lock; asking for Touch ID instead")
-      authenticate(at)
+
+    live.alarm()
+    live.update {
+      $0.phase = "triggered"
+      $0.trigger = kind.rawValue
+      $0.at = LiveState.ms(at)
+      $0.siren = kind.sirenAtOnce
+      $0.bumps = motion.bumps
     }
+    live.event("triggered", kind.rawValue, at: at)
+    let link = live.alarmLink
+    if let recorder {
+      clip = recorder.save { [weak self] photo in
+        guard let self else { return }
+        if let photo, triggeredAt == at { took(photo) }
+        if Push.enabled { Push.alarm(kind, at: at, test: test, link: link, photo: photo) }
+      }
+      for delay in [2.0, 5.0] {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+          guard let self, phase == .triggered, triggeredAt == at else { return }
+          self.recorder?.photo { [weak self] photo in
+            guard let self, let photo, phase == .triggered, triggeredAt == at else { return }
+            took(photo)
+          }
+        }
+      }
+    } else if Push.enabled {
+      Push.alarm(kind, at: at, test: test, link: link, photo: nil)
+    }
+  }
+
+  private func took(_ photo: Data) {
+    photos += 1
+    latestPhoto = photo
+    live.upload(photo)
+    live.event("photo")
   }
 
   private func soundAlarm(_ level: Alarm.Level) {
@@ -239,7 +401,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     guard let alarm else { log("alarm impossible: no built-in speakers"); return }
     do {
       try alarm.play(level)
-      log("alarm \(level)" + (Alarm.loudVolume < 1 ? " (volume setting \(Alarm.loudVolume))" : ""))
+      log("alarm \(level)" + (Alarm.silent ? " (test mode: muted)" : ", volume \(Alarm.loudVolume)"))
     } catch {
       log("alarm failed: \(error)")
     }
@@ -248,10 +410,10 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private func authenticate(_ at: Date) {
     guard phase == .triggered, triggeredAt == at, !screenLocked else { return }
     NSApp.activate(ignoringOtherApps: true)
-    LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "解除警戒模式") { ok, error in
+    LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: L("Disarm Guard Mode")) { ok, error in
       DispatchQueue.main.async {  // GuardApp lives as long as the process
         guard self.phase == .triggered, self.triggeredAt == at else { return }
-        if ok { self.disarm("Touch ID"); return }
+        if ok { self.disarm(.password); return }
         log("auth failed: \(error?.localizedDescription ?? "-")")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.authenticate(at) }
       }
@@ -259,10 +421,35 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   }
 
   /// Idle is written first, so a crash halfway through teardown cannot resume the alarm.
-  private func disarm(_ how: String) {
+  private func disarm(_ how: Disarm, exiting: Bool = false) {
+    guard phase != .idle else { return }
+    let was = phase
     phase = .idle
-    stopWatching()
-    log("disarmed by \(how)")
+    let now = Date()
+    let session = Session(armed: armedAt, ended: now, trigger: trigger, triggeredAt: trigger == nil ? nil : triggeredAt, disarm: how,
+                          bumps: motion.bumps, softSeconds: softFrom.map { Int((sirenFrom ?? now).timeIntervalSince($0)) } ?? 0,
+                          sirenSeconds: sirenFrom.map { Int(now.timeIntervalSince($0)) } ?? 0, photos: photos,
+                          clip: clip?.lastPathComponent, test: test)
+    let guarded = was == .armed || was == .triggered
+    if guarded || how == .sensorsSilent { History.add(session) }
+    // Test mode covers one run, then turns itself off (audit H1).
+    if test && guarded { Prefs.testMode = false }
+    if trigger != nil && Push.enabled { Push.disarmed(how, at: now, test: test) }
+    live.update {
+      $0.phase = "idle"
+      $0.siren = false
+      $0.pass = nil  // the push link stops working here
+    }
+    live.event(guarded ? "disarmed" : "cancelled", how.rawValue, at: now)
+    stopWatching(exiting: exiting)
+    if !exiting {
+      if guarded {
+        veil.welcome(session.welcome, toward: item.button?.window?.frame)
+      } else {
+        veil.cancel()
+      }
+    }
+    log("disarmed: \(how.rawValue)")
     // ponytail: macOS can restart the camera stream by itself after we stopped it (live 2026-09-24:
     // a Touch ID press powered the camera off and on around a disarm, and the light stayed on with
     // nobody reading it). Relaunching drops that stream; a real fix needs CoreMediaIO to honor the stop.
@@ -283,18 +470,25 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     let saved = (try? String(contentsOf: GuardApp.stateFile, encoding: .utf8)).flatMap(Phase.init(rawValue:)) ?? .idle
     let written = (try? FileManager.default.attributesOfItem(atPath: GuardApp.stateFile.path)[.modificationDate] as? Date) ?? .distantPast
     let resumable = (saved == .armed || (saved == .triggered && screenLocked)) && written > GuardApp.bootTime
-    guard resumable, setSleepDisabled(true) else {
+    guard resumable else {
       phase = .idle
       Alarm.restoreLeftover()
-      if GuardApp.sleepDisabled() { setSleepDisabled(false) }
-      if saved != .idle { log("not resuming the \(saved) session") }
+      GuardApp.pmsetQueue.async { if GuardApp.sleepDisabled() { GuardApp.pmset(false) } }
+      if saved != .idle { log("not resuming the \(saved.rawValue) session") }
       return
     }
-    log("resuming \(saved) session after a restart")
+    log("resuming \(saved.rawValue) session after a restart")
+    test = Prefs.testMode  // still on: a test run turns it off only at its disarm
+    Alarm.silent = test
+    armedAt = written
     phase = .arming
+    setSleepDisabled(true)
     startWatching()
+    if Prefs.veil { veil.guarding() }
+    listenForFinger()
     DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-      self?.finishArming(then: saved == .triggered ? { self?.trigger("警戒程序被结束后重启") } : nil)
+      guard let self, phase == .arming else { return }
+      finishArming(resumed: saved == .triggered)
     }
   }
 
@@ -311,12 +505,18 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   }
 
   /// Unplugging the charger of an armed Mac is a trigger (a charger is easy to walk off with).
+  /// Plugging one in while armed counts too, from then on (audit L7).
   private func watchPower() {
     let me = Unmanaged.passUnretained(self).toOpaque()
     guard let src = IOPSNotificationCreateRunLoopSource({ ctx in
       let app = Unmanaged<GuardApp>.fromOpaque(ctx!).takeUnretainedValue()
-      guard app.phase == .armed, app.armedOnAC, !GuardApp.onAC() else { return }
-      app.trigger("拔掉了电源")
+      guard app.phase == .armed else { return }
+      if GuardApp.onAC() {
+        if !app.armedOnAC { log("charger plugged in while armed; unplugging it now triggers") }
+        app.armedOnAC = true
+      } else if app.armedOnAC {
+        app.fire(.charger, "charger unplugged")
+      }
     }, me)?.takeRetainedValue() else { log("power-source notifications unavailable"); return }
     CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)
     powerSource = src
@@ -341,8 +541,17 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   }()
 
   /// `pmset disablesleep` keeps the Mac awake with the lid shut; needs the sudoers rule in README.
+  /// In order and off the main thread; `wait` when the process is about to exit.
+  private func setSleepDisabled(_ on: Bool, wait: Bool = false) {
+    if wait {
+      _ = GuardApp.pmsetQueue.sync { GuardApp.pmset(on) }
+    } else {
+      GuardApp.pmsetQueue.async { GuardApp.pmset(on) }
+    }
+  }
+
   @discardableResult
-  private func setSleepDisabled(_ on: Bool) -> Bool {
+  static func pmset(_ on: Bool) -> Bool {
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/bin/sudo")
     p.arguments = ["-n", "/usr/bin/pmset", "-a", "disablesleep", on ? "1" : "0"]
@@ -363,92 +572,23 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     return out.split(separator: "\n").contains { $0.contains("SleepDisabled") && $0.hasSuffix("1") }
   }
 
-  // MARK: menu
+  // MARK: menu bar
 
   private func render() {
-    let (color, filled): (NSColor, Bool) = switch phase {
-    case .idle: (.systemGray, true)
-    case .arming: (.systemYellow, false)
-    case .armed: (.systemYellow, true)
-    case .triggered: (.systemRed, true)
+    let look: StatusIcon.Look = switch phase {
+    case .idle: .idle
+    case .arming: .arming(progress)
+    case .armed: test ? .test : (degraded || recorder == nil) ? .partial : .armed
+    case .triggered: .alarm
     }
-    item.button?.image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-      let dot = NSBezierPath(ovalIn: NSRect(x: 5, y: 5, width: 8, height: 8))
-      color.set()
-      if filled { dot.fill() } else { dot.lineWidth = 1.5; dot.stroke() }
-      return true
+    let tip = switch phase {
+    case .idle: L("Guard Mode is off")
+    case .arming: L("Starting…")
+    case .armed: L("Guarding")
+    case .triggered: L("Alarm raised")
     }
-    let menu = NSMenu()
-    let label = ["idle": "警戒模式：关", "arming": "警戒模式：倒计时…", "armed": "警戒模式：开", "triggered": "警戒模式：报警中"][phase.rawValue]!
-    menu.addItem(withTitle: label, action: nil, keyEquivalent: "")
-    if phase == .idle {
-      menu.addItem(withTitle: "开启警戒", action: #selector(armClicked), keyEquivalent: "").target = self
-    } else {
-      menu.addItem(withTitle: "指纹键上轻放手指即可解除", action: nil, keyEquivalent: "")
-    }
-    let volume = menu.addItem(withTitle: "报警音量：" + GuardApp.volumeName(Alarm.loudVolume), action: nil, keyEquivalent: "")
-    volume.submenu = NSMenu()
-    for v: Float32 in [0, 0.35, 0.7, 1] {
-      let choice = volume.submenu!.addItem(withTitle: GuardApp.volumeName(v), action: #selector(volumeClicked), keyEquivalent: "")
-      choice.target = self
-      choice.tag = Int(v * 100)
-      choice.state = abs(Alarm.loudVolume - v) < 0.005 ? .on : .off
-    }
-    if phase == .idle {
-      let push = menu.addItem(withTitle: "手机推送：" + (Push.enabled ? "开" : "关"), action: nil, keyEquivalent: "")
-      push.submenu = NSMenu()
-      push.submenu!.addItem(withTitle: Push.enabled ? "关闭手机推送" : "开启手机推送", action: #selector(pushToggled), keyEquivalent: "").target = self
-      if Push.enabled {
-        push.submenu!.addItem(withTitle: "复制订阅名", action: #selector(copyTopic), keyEquivalent: "").target = self
-        push.submenu!.addItem(withTitle: "发送测试推送", action: #selector(testPush), keyEquivalent: "").target = self
-      }
-    }
-    if let lastError { menu.addItem(withTitle: "上次失败：" + lastError.replacingOccurrences(of: "\n", with: "；"), action: nil, keyEquivalent: "") }
-    menu.addItem(.separator())
-    menu.addItem(withTitle: "打开录像文件夹", action: #selector(openFolder), keyEquivalent: "").target = self
-    if phase == .idle { menu.addItem(withTitle: "复制实时画面链接（开启警戒时可看）", action: #selector(copyLiveLink), keyEquivalent: "").target = self }
-    if phase == .idle { menu.addItem(withTitle: "退出", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q") }
-    item.menu = menu
-  }
-
-  static func volumeName(_ v: Float32) -> String { v == 0 ? "静音（测试用）" : "\(Int((v * 100).rounded()))%" }
-
-  @objc private func volumeClicked(_ sender: NSMenuItem) {
-    Alarm.loudVolume = Float32(sender.tag) / 100
-    log("alarm volume set to \(Alarm.loudVolume)")
-    render()
-  }
-
-  @objc private func pushToggled() {
-    Push.enabled.toggle()
-    log("push \(Push.enabled ? "on" : "off")")
-    render()
-    guard Push.enabled else { return }
-    Push.copyTopic()
-    NSApp.activate(ignoringOtherApps: true)
-    let alert = NSAlert()
-    alert.messageText = "手机推送已开启"
-    alert.informativeText = """
-      订阅名已复制，iPhone 上可以直接粘贴。
-      1. 手机上安装 ntfy。
-      2. 点 +，粘贴订阅名，订阅（服务器用默认的 ntfy.sh）。
-      3. 回到这里点「手机推送」里的「发送测试推送」。
-
-      报警时会推送原因和一张摄像头照片，照片在 ntfy 的服务器上保留 3 小时。
-      """
-    alert.runModal()
-  }
-
-  @objc private func copyTopic() { Push.copyTopic() }
-
-  @objc private func copyLiveLink() {
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(Live.link.absoluteString, forType: .string)
-  }
-  @objc private func testPush() { Push.test() }
-
-  @objc private func openFolder() {
-    try? FileManager.default.createDirectory(at: Recorder.folder, withIntermediateDirectories: true)
-    NSWorkspace.shared.open(Recorder.folder)
+    item.button?.image = StatusIcon.image(look)
+    item.button?.toolTip = tip
+    if panel.model.phase != phase { panel.model.phase = phase }
   }
 }

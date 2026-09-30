@@ -1,13 +1,8 @@
 #!/bin/sh
-# Build GuardMode.app, sign it with the Apple Development cert (keeps the camera and Accessibility
-# grants across rebuilds), and (re)load the LaunchAgent.
+# Build GuardMode.app (build.sh) and (re)load the LaunchAgent.
 set -e
 cd "$(dirname "$0")"
-app=build/GuardMode.app
-mkdir -p "$app/Contents/MacOS"
-cp Info.plist "$app/Contents/"
-swiftc -O -swift-version 5 main.swift GuardApp.swift Sensors.swift Alarm.swift Recorder.swift InputTap.swift Push.swift Fingerprint.swift Live.swift -o "$app/Contents/MacOS/guard-mode"
-codesign -f -s "Apple Development" "$app"
+./build.sh
 launchctl bootout "gui/$(id -u)/com.allen.guard-mode" 2>/dev/null && sleep 2  # bootout is async
 cp com.allen.guard-mode.plist ~/Library/LaunchAgents/
 launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.allen.guard-mode.plist

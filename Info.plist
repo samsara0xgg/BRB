@@ -4,11 +4,17 @@
 <dict>
   <key>CFBundleIdentifier</key><string>com.allen.guard-mode</string>
   <key>CFBundleName</key><string>GuardMode</string>
+  <key>CFBundleDisplayName</key><string>Guard Mode</string>
   <key>CFBundleExecutable</key><string>guard-mode</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1</string>
+  <key>CFBundleShortVersionString</key><string>0.2</string>
+  <key>CFBundleVersion</key><string>2</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array><string>en</string><string>zh-Hans</string></array>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
-  <key>NSCameraUsageDescription</key><string>警戒模式开启期间录下电脑前的画面。</string>
+  <key>NSCameraUsageDescription</key><string>Guard Mode records only when someone touches this Mac: the 10 seconds before the alarm and what follows. Walking by is not recorded.</string>
 </dict>
 </plist>

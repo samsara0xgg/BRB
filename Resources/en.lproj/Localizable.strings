@@ -1,0 +1,4 @@
+/* English is the base language: every key is its own English text. Only strings that differ from their key are listed. */
+
+/* Veil.swift: the notice's footer is in the other language, for whoever does not read this one. */
+"PLEASE DO NOT TOUCH · PASSING BY IS NOT RECORDED" = "请勿触碰 · 路过不会被录下";

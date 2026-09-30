@@ -1,43 +1,80 @@
-# GuardMode
+# Guard Mode
 
-Menu-bar guard for leaving the MacBook on a library or cafe table.
+[中文说明](README.zh-CN.md)
 
-- Arm from the menu-bar dot (gray = off, yellow ring = 5 s countdown, yellow = armed, red = alarm).
-- While armed: the built-in camera records to `~/Movies/GuardMode/` (kept 7 days), and the Mac
-  stays awake with the lid shut. These trigger the alarm: the lid angle moving 20 degrees, the
-  laptop turned more than 15 degrees or moving for about a second (a knock or a short nudge does
-  not count), any key, click, or trackpad touch, and unplugging the charger if it was plugged in
-  at arming. A shut lid pauses the recording; it continues in the same file once the lid opens.
-- Volume, mute, and brightness keys are yours to use while armed. They pass through and never
-  trigger.
-- A trigger swallows the stranger's input, locks the screen, beeps softly for 10 s, then sounds a
-  siren. The siren plays on the built-in speakers and holds its volume even if you muted them.
-- The siren's volume is set in the menu under 报警音量 (full when never set). 静音（测试用） is the
-  silent test mode: everything else runs as usual (lock, recording, stages), the speakers stay
-  muted.
-- To disarm, rest a finger on Touch ID, or press it (seen live: the finger is read before the press
-  locks the screen). This works from the countdown on, so a finger during the countdown cancels
-  it. Nothing shows on screen; GuardMode holds the keyboard focus from the countdown on and hands
-  it back. A finger that is not yours, tried until macOS gives up, triggers once armed (during the
-  countdown it is ignored). Unlocking the Mac also disarms, and restores your volume after an alarm.
-- Once the screen is locked (the display slept, or after a trigger), keys and touches no longer
-  trigger, so waking the Mac to unlock it stays silent. Lifting, the lid, and the charger still do.
-- Phone push (optional, off by default): turn it on under 手机推送 in the menu, subscribe to the
-  copied name in the ntfy app (iPhone or Android, server ntfy.sh), then send the test push. A
-  trigger then pushes the reason and a camera photo at ntfy's top priority. ntfy.sh keeps the photo
-  for 3 hours; the subscription name is the only secret.
-- Live view: while armed (from the countdown on), the camera can be watched in any browser. Tapping
-  the push, or its 看实时画面 button, opens the link; 复制实时画面链接 in the menu copies it.
-  Frames (640x360, about 7.5 a second, about 17 MB a minute) flow only while the page is open, and
-  the page shows how old the last frame is. The link can watch but not pose as the camera. It goes
-  through the relay in `relay/`, a Cloudflare Worker on Allen's account
-  (`guardmode-relay.guardmode-gf1n2.workers.dev`); redeploy with `cd relay && npx wrangler deploy`.
-- A crash or kill while armed relaunches and resumes the session. A reboot starts idle.
+A menu-bar guard for leaving a MacBook on a library or café table. While it guards, every screen
+turns to frosted glass with one line on it: please don't touch. Walking past records nothing.
+Touching it floods the screen red from where it was touched, locks it, sounds the alarm, saves
+the 10 seconds before and everything after, and tells your phone.
+
+Apple Silicon MacBooks, macOS 14 or later. On macOS 26 the notice is Liquid Glass.
+
+## What you see
+
+- **The menu-bar shield.** An outline when off. Amber rises through it during the 5 s countdown,
+  it is solid amber while guarding, red with a mark during an alarm, struck through in test mode,
+  and half filled when only part of the Mac is guarded (no camera, or the motion sensor stopped).
+- **The panel.** Click the shield. Start guarding, where the Mac is (library, café, on the go), a
+  note for the screen, the siren's volume, test mode, the frosted screen, phone alerts, the phone
+  page, recordings, and the last few sessions. If something is missing (Accessibility, the camera,
+  the sleep rule), the panel lists it and fixes what it can.
+- **Counting down.** A ring counts 5 s while the fog spreads from the middle of the screen. `esc`
+  cancels, and so does a finger resting on Touch ID.
+- **Guarding.** The ring stretches into a glass sign: "Please don't touch. This Mac is guarded.
+  Touching it sounds the alarm." A green chip under it says "Walking by isn't recorded. Touching it
+  is." Your note sits beside it. The footer repeats it in the other language (Chinese under English,
+  English under Chinese). Other screens get the frost and one small line.
+- **Alarm.** Red spreads from where the Mac was touched (the pointer for the trackpad, the
+  keyboard, the hinge for the lid, Touch ID for a finger, the side for the charger), the sign says
+  only what is true ("You're on camera. The owner has been notified."), and the screen locks.
+- **Welcome back.** Touch ID or unlocking clears the fog from the bottom-right corner. The sign
+  says how long you were away and what happened, then shrinks into the menu-bar shield.
+
+## What sets it off
+
+| | siren |
+|---|---|
+| lifted or carried, turned more than 15°, the lid moved 20°, the charger unplugged (if it was plugged in), the power button | at once |
+| a key, a click, a trackpad touch, a finger that isn't yours | after 10 s of soft beeps, the chance to cancel a false alarm |
+
+A knock on the table, a bag set down next to it, or a short nudge that settles does not count; the
+welcome-back sign counts them as ignored bumps. **Café** needs firmer, longer movement. **On the go**
+ignores shaking and only counts tilt beyond 20°, the lid, the charger and touch.
+
+Volume, mute and brightness keys are yours to use while guarding. A Touch ID press arrives as the
+power button, so the power button waits 400 ms for the finger before it counts.
+
+## Privacy
+
+- From the countdown on, the camera keeps only the last 10 seconds, in memory. Nothing reaches the
+  disk unless the Mac is touched.
+- A trigger saves those 10 seconds and what follows to `~/Movies/GuardMode/` (kept 7 days, 20 GB at
+  most).
+- In the recording, the photos and the phone page, every face except the closest one is
+  pixellated: the person at the laptop is recognizable, people passing behind them are not.
+- The phone page shows the camera only after an alarm.
+
+## Phone
+
+- **Alerts** (optional) go through [ntfy](https://ntfy.sh). Turn them on in the panel, scan the code
+  with the ntfy app, and send a test. An alarm sends what happened and a photo; a disarm follows.
+  The topic name is the only secret, and ntfy.sh keeps a photo for 3 hours.
+- **The phone page** is a link in the panel, with a QR code. Before an alarm it shows whether the
+  Mac is guarded; after one, the live camera, up to 6 photos (kept 30 days) and what happened. It
+  can only watch. The link in an alarm push works only until that alarm is disarmed, because ntfy
+  keeps its messages; the panel's link keeps working. **Reset link** in the panel makes the old
+  one stop working and forgets what the relay kept.
+
+The page runs on the relay in `relay/`, a Cloudflare Worker. **This version needs the relay
+redeployed** (`cd relay && npx wrangler deploy`); until then the old page keeps working with the
+new app, without photos or the timeline. Optionally set `CAM_IDS` on the Worker to the room ids
+allowed to connect.
 
 ## Setup
 
-1. Sudo rule, so arming can keep the Mac awake with the lid shut (`pmset disablesleep`). The
-   first command validates the file; install it only after that prints `parsed OK`:
+1. The sudo rule, so guarding keeps the Mac awake with the lid shut (`pmset disablesleep`). The
+   first command validates the file; install it only after it prints `parsed OK`. The panel can
+   copy these commands for you.
 
    ```sh
    cd ~/Projects/guard-mode
@@ -45,10 +82,10 @@ Menu-bar guard for leaving the MacBook on a library or cafe table.
    sudo install -m 0440 -o root -g wheel guard-mode.sudoers /etc/sudoers.d/guard-mode
    ```
 
-2. `./install.sh` builds, signs, and loads the LaunchAgent `com.allen.guard-mode`. The log is at
-   `~/Library/Logs/guard-mode.log`.
-3. The first arm asks for Accessibility and Camera access. Arming refuses and names every missing
-   piece until all of them are present.
+2. `./install.sh` builds (`build.sh`), signs with your Apple Development certificate, and loads
+   the LaunchAgent `com.allen.guard-mode`. The log is at `~/Library/Logs/guard-mode.log` (trimmed
+   past 10 MB).
+3. Click the shield. The panel asks for Accessibility and the camera.
 
 ## Commands
 
@@ -56,65 +93,72 @@ Menu-bar guard for leaving the MacBook on a library or cafe table.
 
 | command | what | noise |
 |---|---|---|
-| `selftest` | detectors on synthetic data, key classification, hardware present | silent |
-| `sensors [s]` | live lid angle, motion, and detector triggers, for calibrating | silent |
+| `selftest [--no-hardware]` | detectors on synthetic data, input kinds, history, icons, copy, then the hardware | silent |
+| `sensors [s]` | live lid angle, motion, bumps and detector triggers, for the place set in the panel | silent |
 | `keys [s]` | how each real key or trackpad event is treated (needs Accessibility for the terminal) | silent |
-| `camera [s]` | records like an armed session and prints the recording state every second | silent |
+| `camera [s]` | buffers like a guarded session, saves halfway as a trigger would | silent |
 | `record [s]` | raw accelerometer and lid samples as CSV, for tuning offline | silent |
 | `siren [s]` | soft stage, then the siren, then the volume is restored | LOUD |
-| `live [s]` | camera on and connected to the relay, no recording or guarding; prints the link (run through `open -n -W build/GuardMode.app --args live 60` for the camera grant) | silent |
-| `push` | the menu's test push, with a camera photo, to the subscribed phone (a terminal without camera access sends no photo: `open -n -W build/GuardMode.app --args push`) | silent on the Mac |
+| `live [s]` | camera on with live frames allowed, connected to the relay; prints the owner's link (`open -n -W build/GuardMode.app --args live 60` for the camera grant) | silent |
+| `push` | the panel's test push, with a photo | silent on the Mac |
+| `snapshot <stage> [png]` | shows the frosted screen at `countdown`, `armed`, `test`, `alarm` or `welcome`, or the `panel` / `notready` page, for 3.5 s; add `-AppleLanguages "(zh-Hans)"` for Chinese | silent |
 
-The calibration knobs are `MotionDetector` (`tiltLimit`, `shakeLimit`, `sustainFraction`),
-`LidDetector.limit`, and `GuardApp.countdownSeconds` / `softSeconds`.
+The calibration knobs are `MotionDetector` (`tiltLimit`, `shakeLimit`, `sustainFraction`), `Place`
+for the per-place values, `LidDetector.limit`, and `GuardApp.countdownSeconds` / `softSeconds`.
 
-## First live test (with Allen)
+## Languages
 
-Silent steps first:
+English is the base language. Every string in the Swift sources is its own English key, and
+`Resources/zh-Hans.lproj/Localizable.strings` has the Chinese; a Mac set to Chinese shows the
+Chinese. `scripts/check-strings.py` (run in CI) fails when a string has no translation or the
+arguments differ.
 
-1. `keys 30`: volume, mute, and brightness keys print nothing. Letters, clicks, and trackpad touches
-   print `TRIGGER`.
-2. `sensors 60`: a knock on the table must not trigger. Lifting, carrying, tilting, and closing the
-   lid halfway must trigger.
+## Development
 
-Then the steps that make sound:
+`./build.sh` builds `build/GuardMode.app`; `SIGN_IDENTITY=-` signs ad hoc. CI
+(`.github/workflows/build.yml`, macOS 26) builds, lints the plists and strings, runs
+`selftest --no-hardware`, and checks the relay's syntax, on pull requests and `main` only.
 
+## Still to check on a real Mac
+
+These can't run in CI:
+
+1. The frost at the shielding level actually blurs the desktop behind it (`NSVisualEffectView`,
+   behind-window), and the fog spreads smoothly over the countdown.
+2. A finger on Touch ID disarms while the frosted window is key, from the countdown on.
+3. The red starts under the pointer after a trackpad touch, and the lock screen follows 1.2 s later.
+4. After a trigger, the saved movie starts about 10 s before the touch and plays after a `kill -9`.
+5. With two people in front of the camera, only the closer face is sharp in the movie, the photos
+   and the phone page.
+6. The welcome-back sign shrinks into the menu-bar shield.
+7. The display stays on while guarding, and the notice survives plugging in a second screen.
+8. The panel's note field takes typing, and each "Fix" button lands in the right Settings pane.
+9. After `npx wrangler deploy`: the phone page with the panel's link, and with a push link before
+   and after the disarm.
+
+Then the earlier live steps, all in test mode except the siren:
+
+1. `keys 30`: volume, mute and brightness print nothing; letters, clicks and trackpad touches print
+   `TRIGGER`.
+2. `sensors 60`: a knock on the table must not trigger; lifting, carrying, tilting and closing the
+   lid halfway must.
 3. `siren 3`.
-4. Arm, wait out the countdown, touch the trackpad. Expected: the screen locks and soft beeps
-   start. Touch ID within 10 s silences it, and your volume comes back.
-5. Arm, close the lid. Expected: soft, then loud, and it keeps sounding with the lid shut. Open the
-   lid and use Touch ID.
-6. Arm, lift the laptop.
-7. Arm, then `kill -9` the process. Expected: launchd relaunches it, still armed.
-
-Steps 8 to 12 work in the silent test mode; 8 to 11 passed live on 2026-09-24:
-
-8. On the charger, arm, unplug. Expected: triggers and locks.
-9. Arm, trigger, then `kill -9` the process while it alarms. Expected: it relaunches and alarms
-   again, and unlocking disarms and restores your volume. (Live: relaunched in under 1 s, reached
-   the loud stage, the speakers came back to their earlier level.)
-10. Arm, then `pmset displaysleepnow`; lift the laptop; `pmset displaysleepnow` again. Expected: the
-    recording keeps growing through both (live: about 78 MB a minute, frames not frozen).
-11. Arm, rest an unenrolled finger on Touch ID. Expected: triggers.
-12. Arm, and during the countdown rest your finger on Touch ID, or lock the screen and unlock it.
-    Expected: disarms, never reaches armed. (The lock-and-unlock case passed live.)
+4. Guard, touch the trackpad: the screen floods red and locks, soft beeps, then the siren after
+   10 s. Touch ID within 10 s silences it and your volume comes back.
+5. Guard, lift the laptop: the siren starts at once.
+6. On the charger, guard, unplug: triggers.
+7. Guard, trigger, `kill -9` the process: it relaunches, alarms again, and unlocking disarms.
+8. Guard, rest an unenrolled finger on Touch ID: triggers.
+9. During the countdown, rest your finger on Touch ID, or press `esc`: cancels.
 
 ## Emergency stop
 
-`kill -9` relaunches the app and resumes the alarm (soft, then loud). `bootout` sends SIGTERM,
-which disarms: it restores the volume and lets the Mac sleep again, and the app stays down:
+`kill -9` relaunches the app and resumes the alarm. `bootout` sends SIGTERM, which disarms: it
+restores the volume and lets the Mac sleep again, and the app stays down:
 
 ```sh
 launchctl bootout gui/$(id -u)/com.allen.guard-mode
 ```
 
-`./install.sh` brings it back. If the Mac still will not sleep with the lid shut, run
-`sudo pmset -a disablesleep 0`.
-
-## Open questions
-
-- Camera while locked: measured 2026-09-24. The camera kept delivering ~30 frames/s through
-  the lock screen, with the display on (12 s) and asleep (step 10).
-- Do the brightness keys arrive as system-defined key codes 2/3 or as key codes 144/145? Step 1
-  shows it.
-- Does the siren play from the speakers with the lid shut?
+`./install.sh` brings it back. If the Mac still won't sleep with the lid shut, run
+`sudo pmset -a disablesleep 0`. Quitting from the panel works only while it isn't guarding.
