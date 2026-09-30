@@ -46,6 +46,7 @@ case "record": recordCommand(seconds: seconds ?? 60)
 case "camera": cameraCommand(seconds: seconds ?? 40)
 case "push": Push.test { exit($0 ? 0 : 1) }; RunLoop.main.run()
 case "live": liveCommand(seconds: seconds ?? 60)
+case "snapshot": snapshotCommand(args.count > 1 ? args[1] : "armed", out: args.count > 2 && !args[2].hasPrefix("-") ? args[2] : nil)
 case nil:
   trimLog()
   let app = NSApplication.shared
@@ -54,7 +55,7 @@ case nil:
   app.delegate = delegate
   app.run()
 default:
-  print("usage: guard-mode [selftest [--no-hardware] | sensors [s] | keys [s] | siren [s] | record [s] | camera [s] | push | live [s]]")
+  print("usage: guard-mode [selftest [--no-hardware] | sensors [s] | keys [s] | siren [s] | record [s] | camera [s] | push | live [s] | snapshot <stage> [png]]")
   exit(2)
 }
 
@@ -308,4 +309,85 @@ func sirenCommand(seconds: Double) {
   }
   alarm.stop()
   exit(0)
+}
+
+/// Shows the frosted screen at one stage, or the panel, for 3.5 s without guarding anything (silent):
+/// for screenshots. With `out`, also renders the notice or the panel to that PNG (SwiftUI only, so
+/// without the blur behind it). Run with `-AppleLanguages "(zh-Hans)"` for the Chinese copy.
+func snapshotCommand(_ what: String, out: String?) {
+  let app = NSApplication.shared
+  app.setActivationPolicy(.accessory)
+  let zh = Bundle.main.preferredLocalizations.first?.hasPrefix("zh") == true
+  let veil = Veil()
+  let m = veil.model
+  m.note = zh ? "3 点回来" : "Back at 3"
+  m.armedAt = Date().addingTimeInterval(-42 * 60)
+  m.pushOn = true
+  let armed = Date().addingTimeInterval(-40 * 60)
+  let alarmed = Session(armed: armed, ended: Date(), trigger: .lifted, triggeredAt: armed.addingTimeInterval(1500), disarm: .fingerprint,
+                        bumps: 0, softSeconds: 0, sirenSeconds: 8, photos: 3, clip: "x.mov", test: false)
+  let quiet = Session(armed: armed.addingTimeInterval(-86400), ended: armed.addingTimeInterval(-86400 + 1500), trigger: nil, triggeredAt: nil,
+                      disarm: .fingerprint, bumps: 2, softSeconds: 0, sirenSeconds: 0, photos: 0, clip: nil, test: false)
+  var panel: PanelModel?
+  var window: NSWindow?
+  switch what {
+  case "countdown":
+    veil.countdown(5)
+    for s in 1...3 { DispatchQueue.main.asyncAfter(deadline: .now() + Double(s)) { m.remaining = 5 - s } }
+  case "armed", "test":
+    m.test = what == "test"
+    veil.guarding()
+  case "alarm":
+    veil.guarding()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { veil.alarm(pointer: nil, origin: Trigger.keyboard.floodOrigin) }
+  case "welcome":
+    veil.guarding()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { veil.welcome(alarmed.welcome, toward: nil) }
+  case "panel", "notready":
+    let p = PanelModel()
+    p.refresh()
+    if what == "notready" { p.page = .notReady }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+      p.recent = [alarmed, quiet]
+      p.clips = 2
+      if what == "panel" { p.checks = p.checks.map { Check(id: $0.id, title: $0.title, detail: $0.detail, ok: true, optional: $0.optional, quiet: $0.quiet) } }
+    }
+    let host = NSHostingController(rootView: PanelView(model: p))
+    host.sizingOptions = .preferredContentSize
+    let w = NSWindow(contentViewController: host)
+    w.styleMask = [.titled, .fullSizeContentView]
+    w.titlebarAppearsTransparent = true
+    w.center()
+    w.makeKeyAndOrderFront(nil)
+    app.activate(ignoringOtherApps: true)
+    panel = p
+    window = w
+  default:
+    print("snapshot countdown | armed | test | alarm | welcome | panel | notready [out.png]")
+    exit(2)
+  }
+  DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
+    guard let out else { return }
+    let size = NSScreen.screens.first { $0.isBuiltIn }?.frame.size ?? NSScreen.main?.frame.size ?? CGSize(width: 1512, height: 982)
+    let view: AnyView = if let panel {
+      AnyView(PanelView(model: panel).background(Color(nsColor: .windowBackgroundColor)))
+    } else {
+      AnyView(VeilView(model: m, showsNotice: true, displayID: 0)
+        .frame(width: size.width, height: size.height)
+        .background(LinearGradient(colors: [Color(red: 0.16, green: 0.2, blue: 0.3), Color(red: 0.05, green: 0.07, blue: 0.12)], startPoint: .top, endPoint: .bottom)))
+    }
+    let renderer = ImageRenderer(content: view)
+    renderer.scale = 2
+    guard let cg = renderer.cgImage, let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else {
+      print("render failed")
+      return
+    }
+    try? png.write(to: URL(fileURLWithPath: out))
+    log("rendered \(what) to \(out)")
+  }
+  DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+    _ = window
+    exit(0)
+  }
+  app.run()
 }

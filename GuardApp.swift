@@ -544,7 +544,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   /// In order and off the main thread; `wait` when the process is about to exit.
   private func setSleepDisabled(_ on: Bool, wait: Bool = false) {
     if wait {
-      GuardApp.pmsetQueue.sync { GuardApp.pmset(on) }
+      _ = GuardApp.pmsetQueue.sync { GuardApp.pmset(on) }
     } else {
       GuardApp.pmsetQueue.async { GuardApp.pmset(on) }
     }

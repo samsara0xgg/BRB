@@ -11,6 +11,8 @@ jobs:
   mac:
     runs-on: macos-26
     timeout-minutes: 20
+    permissions:
+      contents: write  # temporary: the review screenshots below
     steps:
       - uses: actions/checkout@v5
       - name: Toolchain
@@ -25,3 +27,21 @@ jobs:
         run: build/GuardMode.app/Contents/MacOS/guard-mode selftest --no-hardware
       - name: Check the relay's syntax
         run: cp relay/worker.js "$RUNNER_TEMP/worker.mjs" && node --check "$RUNNER_TEMP/worker.mjs"
+      # Temporary, for reviewing design A on a real screen: pushed to the ci-shots branch.
+      - name: Screenshots
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          mkdir -p shots
+          for lang in en zh-Hans; do
+            for stage in countdown armed alarm welcome panel notready; do
+              build/GuardMode.app/Contents/MacOS/guard-mode snapshot $stage "$PWD/shots/$stage-$lang-render.png" -AppleLanguages "($lang)" &
+              sleep 2.8
+              screencapture -x -t jpg "shots/$stage-$lang.jpg" || echo "screencapture failed"
+              wait
+            done
+          done
+          ls -la shots
+          cd shots
+          git init -q && git checkout -q -b ci-shots && git add . && git -c user.name=ci -c user.email=ci@localhost commit -qm "screenshots ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-shots
