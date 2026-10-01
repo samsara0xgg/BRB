@@ -6,6 +6,26 @@
 
 需要 Apple 芯片的 MacBook，macOS 14 或更新。在 macOS 26 上提示牌是液态玻璃（Liquid Glass）。
 
+## 安装
+
+需要 Apple 芯片的 MacBook、macOS 14 或更新，以及 Apple 的命令行工具（还没装的话运行 `xcode-select --install`）。
+
+```sh
+git clone https://github.com/samsara0xgg/guard-mode.git
+cd guard-mode
+./install.sh
+```
+
+（也可以点 **Code → Download ZIP**，解压后在那个文件夹里运行 `./install.sh`。）
+
+`install.sh` 会构建 App，马上启动并设为每次登录自动启动，然后问你要不要装一条 sudo 规则（`scripts/sleep-rule.sh`，只需输入一次密码），让警戒时合上盖子电脑也不睡眠。菜单栏会出现一个盾牌，面板会自己打开：
+
+1. **三张卡片**，讲清它做什么、录什么、怎么停下。
+2. **静音试一次。** 过程中会请你允许辅助功能（用来发现键盘和触控板被碰）和摄像头；还缺什么，面板会列出来，每一项都有修复按钮。
+3. **等屏幕变成磨砂后碰一下触控板**：屏幕会像陌生人碰到时那样泛红并锁屏，只是不出声。解锁或把手指放在触控 ID 上就能停下。测试模式用完会自动关闭。
+
+面板底部的 **使用说明** 可以再看一遍卡片。`./uninstall.sh` 会把它卸掉（包括那条 sudo 规则），录像留在 `~/Movies/GuardMode/`。日志在 `~/Library/Logs/guard-mode.log`。
+
 ## 你会看到什么
 
 - **菜单栏盾牌。** 关闭时是空心轮廓；5 秒倒计时时琥珀色从下往上涨满；警戒中是实心琥珀色；报警时变红并带感叹号；测试模式下有一道斜杠；只有部分在警戒时（没有摄像头，或运动传感器停了）是半满。
@@ -38,20 +58,7 @@
 - **提醒**（可选）通过 [ntfy](https://ntfy.sh) 推送。在面板里打开，用 ntfy App 扫码订阅，发一条测试。报警时推送发生了什么和一张照片，解除后再推一条。订阅名是唯一的钥匙，ntfy.sh 上的照片保留 3 小时。
 - **手机页面** 的链接和二维码在面板里。报警前只显示电脑有没有在警戒；报警后能看实时画面、最多 6 张照片（保留 30 天）和经过。页面只能看，不能控制电脑。报警推送里的链接只在这次报警解除前有效（因为 ntfy 会保存消息）；面板里的链接一直有效。面板里的 **重置链接** 会让旧链接立刻失效，并清掉中继上存的东西。
 
-页面跑在 `relay/` 里的中继上，是一个 Cloudflare Worker。**这个版本需要重新部署中继**（`cd relay && npx wrangler deploy`）；在那之前，旧页面和新 App 仍能配合使用，只是没有照片和经过。还可以在 Worker 上设置 `CAM_IDS`，只允许列出的房间号连接。
-
-## 安装
-
-1. 装 sudo 规则，让警戒时合上盖子也不睡眠（`pmset disablesleep`）。第一条命令检查文件，输出 `parsed OK` 后再装。面板也能帮你复制这些命令。
-
-   ```sh
-   cd ~/Projects/guard-mode
-   sudo visudo -cf guard-mode.sudoers
-   sudo install -m 0440 -o root -g wheel guard-mode.sudoers /etc/sudoers.d/guard-mode
-   ```
-
-2. `./install.sh` 会构建（`build.sh`）、用你的 Apple Development 证书签名，并加载 LaunchAgent `com.allen.guard-mode`。日志在 `~/Library/Logs/guard-mode.log`（超过 10 MB 会自动截短）。
-3. 点菜单栏的盾牌，面板会请你授权辅助功能和摄像头。
+页面跑在 `relay/` 里的中继上，是一个 Cloudflare Worker，默认用作者部署的那个。想用自己的：运行 `cd relay && npx wrangler deploy`，再运行 `defaults write com.allen.guard-mode relayHost <你的-worker>.workers.dev`，然后重启 Guard Mode。还可以在 Worker 上设置 `CAM_IDS`，只允许列出的房间号连接（面板里手机链接 `/v/` 后面那串）。
 
 ## 命令
 
@@ -113,4 +120,4 @@
 launchctl bootout gui/$(id -u)/com.allen.guard-mode
 ```
 
-`./install.sh` 可以再装回来。如果合盖后电脑还是不睡，运行 `sudo pmset -a disablesleep 0`。面板里的退出只在没有警戒时可用。
+`./install.sh` 可以再装回来，`./uninstall.sh` 会彻底卸掉。如果合盖后电脑还是不睡，运行 `sudo pmset -a disablesleep 0`。面板里的退出只在没有警戒时可用。

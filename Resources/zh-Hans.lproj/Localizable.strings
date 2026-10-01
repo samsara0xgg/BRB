@@ -173,3 +173,19 @@
 "Library" = "图书馆";
 "Café" = "咖啡馆";
 "On the go" = "路上";
+
+/* First-run introduction */
+"Welcome to Guard Mode" = "欢迎使用 Guard Mode";
+"%ld of %ld" = "%ld / %ld";
+"Start it before you step away" = "离开前打开它";
+"Every screen frosts over and asks people not to touch. Lifting, tilting or closing the Mac, a key or a click sounds the alarm." = "每块屏幕都会变成磨砂玻璃，提醒别人不要碰。拿起、倾斜、合上电脑，或者按键、点击，都会报警。";
+"Walking by isn't recorded" = "路过不会被录下";
+"The camera keeps only the last 10 seconds, in memory. They are saved, with the faces behind the person blurred, only when someone touches the Mac." = "摄像头只在内存里保留最近 10 秒。只有有人碰了电脑，这段画面才会存下来，后面路过的人脸会打码。";
+"Back? Rest a finger on Touch ID" = "回来了？手指放在触控 ID 上";
+"Touch ID or unlocking the Mac stops it. Try it once in test mode first: nothing makes a sound." = "用触控 ID 或解锁电脑就能停下。先用测试模式试一次，整个过程不会出声。";
+"Skip" = "跳过";
+"Back" = "上一步";
+"Next" = "下一步";
+"Try a silent run" = "静音试一次";
+"Guard Mode asks for Accessibility and the camera on the way." = "过程中会请你允许辅助功能和摄像头。";
+"How it works" = "使用说明";

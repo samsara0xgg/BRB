@@ -53,6 +53,13 @@ enum Prefs {
     set { d.set(newValue, forKey: "testMode") }
   }
 
+  /// The three-card introduction has been seen (or skipped): until then the panel opens on it, and
+  /// the first launch opens the panel by itself.
+  static var introSeen: Bool {
+    get { d.bool(forKey: "introSeen") }
+    set { d.set(newValue, forKey: "introSeen") }
+  }
+
   /// The frosted screen while armed. Off: the old invisible mode, the menu bar icon shows the state.
   static var veil: Bool {
     get { d.object(forKey: "veil") as? Bool ?? true }

@@ -37,7 +37,11 @@ struct LiveState: Encodable {
 /// that works only until that alarm is disarmed, because ntfy keeps its messages. Without either,
 /// the page shows only whether the Mac is guarded.
 final class Live {
-  static let host = "guardmode-relay.guardmode-gf1n2.workers.dev"
+  /// The author's relay, unless `defaults write com.allen.guard-mode relayHost <host>` names your own.
+  static var host: String {
+    let own = UserDefaults.standard.string(forKey: "relayHost") ?? ""
+    return own.isEmpty ? "guardmode-relay.guardmode-gf1n2.workers.dev" : own
+  }
 
   /// The Mac's secret: it connects as the camera with it.
   static var key: String { stored("liveKey", length: 32) }

@@ -344,10 +344,14 @@ func snapshotCommand(_ what: String, out: String?) {
   case "welcome":
     veil.guarding()
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { veil.welcome(alarmed.welcome, toward: nil) }
-  case "panel", "notready":
+  case "panel", "notready", "intro", "intro2", "intro3":
     let p = PanelModel()
     p.refresh()
     if what == "notready" { p.page = .notReady }
+    if what.hasPrefix("intro") {
+      p.page = .intro
+      p.introStep = what == "intro3" ? 2 : what == "intro2" ? 1 : 0
+    }
     p.recent = [alarmed, quiet]
     p.clips = 2
     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
@@ -373,7 +377,7 @@ func snapshotCommand(_ what: String, out: String?) {
     panel = p
     window = w
   default:
-    print("snapshot countdown | armed | test | alarm | welcome | panel | notready [out.png]")
+    print("snapshot countdown | armed | test | alarm | welcome | panel | notready | intro | intro2 | intro3 [out.png]")
     exit(2)
   }
   DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {

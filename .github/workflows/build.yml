@@ -1,6 +1,6 @@
 name: Build
 
-# macOS minutes cost ten times Linux minutes on a private repo: pull requests, main and by hand only.
+# Pull requests, main and by hand.
 on:
   pull_request:
   push:
@@ -12,7 +12,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 20
     permissions:
-      contents: read
+      contents: write  # temporary: the review screenshots below
     steps:
       - uses: actions/checkout@v5
       - name: Toolchain
@@ -27,3 +27,41 @@ jobs:
         run: build/GuardMode.app/Contents/MacOS/guard-mode selftest --no-hardware
       - name: Check the relay's syntax
         run: cp relay/worker.js "$RUNNER_TEMP/worker.mjs" && node --check "$RUNNER_TEMP/worker.mjs"
+      # What someone who downloads the repo goes through: a ZIP like GitHub's "Download ZIP"
+      # (git archive keeps the executable bits), unpacked into a folder with a space in its name.
+      - name: Install from a downloaded copy
+        run: |
+          dir="$HOME/Downloads/Guard Mode download"
+          mkdir -p "$dir"
+          git archive --format=zip -o "$RUNNER_TEMP/guard-mode.zip" HEAD
+          unzip -q "$RUNNER_TEMP/guard-mode.zip" -d "$dir"
+          cd "$dir"
+          ./install.sh < /dev/null
+          ./scripts/sleep-rule.sh
+          sudo cat /etc/sudoers.d/guard-mode
+          sleep 6
+          launchctl print "gui/$(id -u)/com.allen.guard-mode" | grep -E "^\s*(state|pid|program) ="
+          plutil -lint ~/Library/LaunchAgents/com.allen.guard-mode.plist
+          grep -q "$dir/build/GuardMode.app" ~/Library/LaunchAgents/com.allen.guard-mode.plist
+          launchctl print "gui/$(id -u)/com.allen.guard-mode" | grep -q "state = running"
+          tail -5 ~/Library/Logs/guard-mode.log
+      # Temporary, for reviewing the first launch on a real screen: pushed to the ci-shots branch.
+      - name: Screenshots
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          mkdir -p shots
+          screencapture -x -t jpg shots/first-launch.jpg
+          for lang in en zh-Hans; do
+            for stage in intro intro2 intro3 panel notready; do
+              build/GuardMode.app/Contents/MacOS/guard-mode snapshot $stage "$PWD/shots/$stage-$lang-render.png" -AppleLanguages "($lang)" &
+              sleep 2.8
+              screencapture -x -t jpg "shots/$stage-$lang.jpg" || true
+              wait
+            done
+          done
+          cd "$HOME/Downloads/Guard Mode download" && ./uninstall.sh < /dev/null && cd -
+          test ! -e ~/Library/LaunchAgents/com.allen.guard-mode.plist
+          cd shots
+          git init -q && git checkout -q -b ci-shots && git add . && git -c user.name=ci -c user.email=ci@localhost commit -qm "screenshots ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-shots
