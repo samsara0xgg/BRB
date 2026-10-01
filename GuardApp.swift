@@ -143,6 +143,13 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   }
 
   /// Quitting while armed would leave the Mac unguarded without anyone noticing (audit M1).
+  /// Opening BRB again from Applications or Launchpad shows the panel: a menu-bar app has no
+  /// window, and otherwise nothing would happen.
+  func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+    if !panel.isShown, let button = item.button { panel.toggle(from: button) }
+    return false
+  }
+
   func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
     guard phase == .idle else {
       log("quit refused while \(phase.rawValue)")

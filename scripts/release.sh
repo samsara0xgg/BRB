@@ -5,6 +5,7 @@
 #
 # Needs, once per Mac: a "Developer ID Application" certificate in the login keychain, a
 # notarytool keychain profile (NOTARY_PROFILE, default Typlus) and the GitHub CLI signed in.
+# The disk image's window (background, icon places) comes from dmgbuild, installed into build/venv.
 # LOCAL=1 builds the disk image ad hoc and stops there (CI does this).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -39,12 +40,12 @@ if [ "$LOCAL" != 1 ]; then
   spctl -a -vv "$app"
 fi
 
-rm -rf dist/dmg "$dmg"
-mkdir dist/dmg
-ditto "$app" dist/dmg/BRB.app
-ln -s /Applications dist/dmg/Applications
-hdiutil create -volname BRB -srcfolder dist/dmg -format UDZO -ov "$dmg" > /dev/null
-rm -rf dist/dmg
+# A window that opens on BRB, an arrow and Applications, saying to drag one onto the other.
+rm -f "$dmg" build/dmg-background*
+"$app/Contents/MacOS/brb" dmg-background build/dmg-background
+tiffutil -cathidpicheck build/dmg-background.png build/dmg-background@2x.png -out build/dmg-background.tiff 2> /dev/null
+[ -x build/venv/bin/dmgbuild ] || { python3 -m venv build/venv && build/venv/bin/pip install -q "dmgbuild>=1.6,<2"; }
+build/venv/bin/dmgbuild -s scripts/dmg-settings.py -D app="$app" -D background=build/dmg-background.tiff BRB "$dmg" > /dev/null
 if [ "$LOCAL" = 1 ]; then
   echo "made $dmg (ad hoc, not notarized)"
   exit 0
