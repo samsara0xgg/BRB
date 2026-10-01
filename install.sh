@@ -23,7 +23,8 @@ launchctl bootout "gui/$(id -u)/$label" 2>/dev/null && sleep 2  # bootout is asy
 launchctl bootstrap "gui/$(id -u)" "$agents/$label.plist"
 echo "Guard Mode is running: the shield in the menu bar. Log: ~/Library/Logs/guard-mode.log"
 
-if sudo -n -l /usr/bin/pmset -a disablesleep 1 >/dev/null 2>&1; then
+# -k: a password typed in this Terminal a minute ago must not count as the rule.
+if sudo -n -k -l /usr/bin/pmset -a disablesleep 1 >/dev/null 2>&1; then
   echo "The lid rule is already installed."
 elif [ -t 0 ]; then
   printf "Install the rule that keeps the Mac awake with the lid shut? It asks for your password once. [Y/n] "
