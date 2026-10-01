@@ -1,8 +1,8 @@
-# Guard Mode
+# BRB
 
 [中文说明](README.zh-CN.md)
 
-A menu-bar guard for leaving a MacBook on a library or café table. While it guards, every screen
+BRB (be right back) is a menu-bar guard for leaving a MacBook on a library or café table. While it guards, every screen
 turns to frosted glass with one line on it: please don't touch. Walking past records nothing.
 Touching it floods the screen red from where it was touched, locks it, sounds the alarm, saves
 the 10 seconds before and everything after, and tells your phone.
@@ -27,15 +27,15 @@ sudo rule (`scripts/sleep-rule.sh`, asks for your password once) that keeps the 
 lid shut while it guards. A shield appears in the menu bar and the panel opens by itself:
 
 1. **Three cards** say what it does, what it records, and how to stop it.
-2. **Try a silent run.** Guard Mode asks for Accessibility (to notice the keyboard and trackpad) and
+2. **Try a silent run.** BRB asks for Accessibility (to notice the keyboard and trackpad) and
    the camera; the panel lists anything still missing, with a button to fix each one.
 3. **Touch the trackpad** once the screen has frosted over: it turns red and locks, as it would for
    a stranger, but stays silent. Unlock, or rest a finger on Touch ID, to stop. Test mode switches
    itself off afterwards.
 
 **How it works** at the bottom of the panel shows the cards again. `./uninstall.sh` removes it
-again (the lid rule too); recordings stay in `~/Movies/GuardMode/`. The log is at
-`~/Library/Logs/guard-mode.log`.
+again (the lid rule too); recordings stay in `~/Movies/BRB/`. The log is at
+`~/Library/Logs/brb.log`.
 
 ## What you see
 
@@ -76,7 +76,7 @@ power button, so the power button waits 400 ms for the finger before it counts.
 
 - From the countdown on, the camera keeps only the last 10 seconds, in memory. Nothing reaches the
   disk unless the Mac is touched.
-- A trigger saves those 10 seconds and what follows to `~/Movies/GuardMode/` (kept 7 days, 20 GB at
+- A trigger saves those 10 seconds and what follows to `~/Movies/BRB/` (kept 7 days, 20 GB at
   most).
 - In the recording, the photos and the phone page, every face except the closest one is
   pixellated: the person at the laptop is recognizable, people passing behind them are not.
@@ -95,13 +95,13 @@ power button, so the power button waits 400 ms for the finger before it counts.
 
 The page runs on the relay in `relay/`, a Cloudflare Worker; out of the box the app uses the
 author's. To run your own: `cd relay && npx wrangler deploy`, then
-`defaults write com.allen.guard-mode relayHost <your-worker>.workers.dev` and restart Guard Mode.
+`defaults write com.allen.guard-mode relayHost <your-worker>.workers.dev` and restart BRB.
 Optionally set `CAM_IDS` on the Worker to the room ids allowed to connect (the part of the panel's
 phone link after `/v/`).
 
 ## Commands
 
-`build/GuardMode.app/Contents/MacOS/guard-mode <command>`:
+`build/BRB.app/Contents/MacOS/brb <command>`:
 
 | command | what | noise |
 |---|---|---|
@@ -111,7 +111,7 @@ phone link after `/v/`).
 | `camera [s]` | buffers like a guarded session, saves halfway as a trigger would | silent |
 | `record [s]` | raw accelerometer and lid samples as CSV, for tuning offline | silent |
 | `siren [s]` | soft stage, then the siren, then the volume is restored | LOUD |
-| `live [s]` | camera on with live frames allowed, connected to the relay; prints the owner's link (`open -n -W build/GuardMode.app --args live 60` for the camera grant) | silent |
+| `live [s]` | camera on with live frames allowed, connected to the relay; prints the owner's link (`open -n -W build/BRB.app --args live 60` for the camera grant) | silent |
 | `push` | the panel's test push, with a photo | silent on the Mac |
 | `snapshot <stage> [png]` | shows the frosted screen at `countdown`, `armed`, `test`, `alarm` or `welcome`, or the `panel` / `notready` page, for 3.5 s; add `-AppleLanguages "(zh-Hans)"` for Chinese | silent |
 
@@ -127,7 +127,7 @@ arguments differ.
 
 ## Development
 
-`./build.sh` builds `build/GuardMode.app`; `SIGN_IDENTITY=-` signs ad hoc. CI
+`./build.sh` builds `build/BRB.app`; `SIGN_IDENTITY=-` signs ad hoc. CI
 (`.github/workflows/build.yml`, macOS 26) builds, lints the plists and strings, runs
 `selftest --no-hardware`, and checks the relay's syntax, on pull requests and `main` only.
 

@@ -64,7 +64,7 @@ enum StatusIcon {
       return true
     }
     image.isTemplate = look == .idle
-    image.accessibilityDescription = "Guard Mode"
+    image.accessibilityDescription = "BRB"
     return image
   }
 

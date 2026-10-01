@@ -12,7 +12,7 @@ enum Push {
   /// Created on first use and kept, so turning push off and on again needs no new subscription.
   static var topic: String {
     if let t = UserDefaults.standard.string(forKey: "ntfyTopic") { return t }
-    let t = "guardmode-" + Live.random(20)
+    let t = "brb-" + Live.random(20)
     UserDefaults.standard.set(t, forKey: "ntfyTopic")
     return t
   }
@@ -38,7 +38,7 @@ enum Push {
 
   /// Something stopped working while armed, and the Mac is only partly guarded.
   static func warning(_ message: String, test: Bool) {
-    send(title: titled(L("Guard Mode needs a look"), test), message: message, priority: 4, link: nil, photo: nil)
+    send(title: titled(L("BRB needs a look"), test), message: message, priority: 4, link: nil, photo: nil)
   }
 
   private static func titled(_ title: String, _ test: Bool) -> String { test ? L("Test: %@", title) : title }
@@ -53,7 +53,7 @@ enum Push {
       url.queryItems! += [.init(name: "click", value: link.absoluteString),
                           .init(name: "actions", value: "view, \(L("Watch live")), \(link.absoluteString)")]
     }
-    if photo != nil { url.queryItems!.append(.init(name: "filename", value: "guardmode.jpg")) }
+    if photo != nil { url.queryItems!.append(.init(name: "filename", value: "brb.jpg")) }
     // `+` is left alone in a query and read as a space by some servers.
     url.percentEncodedQuery = url.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
     var request = URLRequest(url: url.url!, timeoutInterval: 15)
@@ -83,7 +83,7 @@ enum Push {
     DispatchQueue.main.asyncAfter(deadline: .now() + 1) {  // let the exposure settle
       camera.photo { photo in
         camera.stop()
-        send(title: L("Guard Mode test"), message: L("If you see this, alarms will reach this phone."), priority: 3, link: nil, photo: photo, done: done)  // no link: ntfy keeps it, and the owner link must not leak
+        send(title: L("BRB test"), message: L("If you see this, alarms will reach this phone."), priority: 3, link: nil, photo: photo, done: done)  // no link: ntfy keeps it, and the owner link must not leak
       }
     }
   }

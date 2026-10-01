@@ -269,7 +269,7 @@ const PAGE = `<!doctype html>
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0b0f1c">
-<title>Guard Mode</title>
+<title>BRB</title>
 <style>
   :root {
     --bg: #0b0f1c; --ink: #eef1f8; --dim: rgba(238, 241, 248, .62); --faint: rgba(238, 241, 248, .38);
@@ -321,7 +321,7 @@ const PAGE = `<!doctype html>
 <main>
   <header>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8 19.4 5.6v5.8c0 4.8-3.1 8.6-7.4 10.1-4.3-1.5-7.4-5.3-7.4-10.1V5.6Z" fill="#f6b544"/><circle cx="12" cy="11.4" r="2.4" fill="#2b1a00"/></svg>
-    <h1>Guard Mode</h1>
+    <h1>BRB</h1>
     <span class="pill" id="pill"></span>
   </header>
   <div class="live" id="live" hidden><img id="frame" alt=""><span class="tag" id="age"></span><div class="empty" id="waiting"></div></div>
@@ -347,7 +347,7 @@ const PAGE = `<!doctype html>
     places: { library: "图书馆", cafe: "咖啡馆", transit: "路上" },
     headline: { lifted: "电脑被拿起来了", tilted: "电脑被挪动了", lidClosed: "屏幕被合上了", lidMoved: "屏幕被掰动了", charger: "电源被拔掉了", powerKey: "有人按了电源键", keyboard: "有人碰了键盘", trackpad: "有人碰了触控板", finger: "有人试了指纹", restarted: "程序重启后继续报警" },
     event: { armed: "开始警戒", photo: "拍了一张照片", siren: "警笛响了", warning: "运动传感器停了", cancelled: "取消了" },
-    disarm: { fingerprint: "用指纹解除", unlock: "解锁后解除", password: "用指纹或密码解除", escape: "取消了", stopped: "警戒模式被停止", sensorsSilent: "传感器没有数据，已停止", tapFailed: "为了监听键盘而重启" },
+    disarm: { fingerprint: "用指纹解除", unlock: "解锁后解除", password: "用指纹或密码解除", escape: "取消了", stopped: "警戒被停止", sensorsSilent: "传感器没有数据，已停止", tapFailed: "为了监听键盘而重启" },
     disarmed: "已解除", footer: "这个页面只能看，不能控制电脑",
   } : {
     connecting: "Connecting…", off: "Off", guarding: "Guarding", alarm: "Alarm", offline: "Offline", arming: "Starting",
@@ -362,7 +362,7 @@ const PAGE = `<!doctype html>
     places: { library: "Library", cafe: "Café", transit: "On the go" },
     headline: { lifted: "Your Mac was picked up", tilted: "Your Mac was moved", lidClosed: "The lid was closed", lidMoved: "The lid was moved", charger: "The charger was unplugged", powerKey: "The power button was pressed", keyboard: "Someone touched the keyboard", trackpad: "Someone touched the trackpad", finger: "Someone tried a fingerprint", restarted: "The alarm resumed after a restart" },
     event: { armed: "Guarding started", photo: "Took a photo", siren: "The siren started", warning: "The motion sensor stopped", cancelled: "Cancelled" },
-    disarm: { fingerprint: "Disarmed with Touch ID", unlock: "Disarmed by unlocking", password: "Disarmed with Touch ID or password", escape: "Cancelled", stopped: "Guard Mode was stopped", sensorsSilent: "Stopped: the sensors sent no data", tapFailed: "Restarted to watch the keyboard" },
+    disarm: { fingerprint: "Disarmed with Touch ID", unlock: "Disarmed by unlocking", password: "Disarmed with Touch ID or password", escape: "Cancelled", stopped: "Guarding was stopped", sensorsSilent: "Stopped: the sensors sent no data", tapFailed: "Restarted to watch the keyboard" },
     disarmed: "Disarmed", footer: "This page can only watch. It can't control the Mac.",
   };
   document.documentElement.lang = zh ? "zh-Hans" : "en";
@@ -376,7 +376,7 @@ const PAGE = `<!doctype html>
   $("footer").textContent = T.footer;
   $("photosLabel").textContent = T.photos;
   $("timelineLabel").textContent = T.timeline;
-  document.title = "Guard Mode";
+  document.title = "BRB";
 
   function chip(text, cls) {
     const el = document.createElement("span");

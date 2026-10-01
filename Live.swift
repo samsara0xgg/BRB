@@ -27,7 +27,7 @@ struct LiveState: Encodable {
   static func ms(_ d: Date) -> Int64 { Int64(d.timeIntervalSince1970 * 1000) }
 }
 
-/// The phone page, through the GuardMode relay (relay/, a Cloudflare Worker). From the countdown on
+/// The phone page, through the BRB relay (relay/, a Cloudflare Worker). From the countdown on
 /// the Mac holds a WebSocket to the relay and keeps it told what is happening; camera frames flow
 /// only after a trigger and only while an allowed page is open. Photos of an alarm are kept by the
 /// relay for 30 days.

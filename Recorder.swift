@@ -5,14 +5,14 @@ import IOKit
 /// The built-in camera, recording only when someone touches the Mac. From the countdown on it keeps
 /// the last 10 s in memory (8 small JPEGs a second) and nothing on disk: walking past an armed Mac
 /// leaves no trace. `save` writes those 10 s and everything after them to
-/// ~/Movies/GuardMode/<time>.mov until `stop`, and hands out the newest frame as the first photo.
+/// ~/Movies/BRB/<time>.mov until `stop`, and hands out the newest frame as the first photo.
 /// Every photo, live frame and movie frame has bystanders' faces pixellated (`Redactor`).
 final class Recorder: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
-  static let folder = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Movies/GuardMode")
+  static let folder = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Movies/BRB")
   static let ringSeconds = 10.0
   private let session = AVCaptureSession()
   private let frames = AVCaptureVideoDataOutput()
-  private let queue = DispatchQueue(label: "guard-mode.frames")
+  private let queue = DispatchQueue(label: "brb.frames")
   // The frame queue's own state.
   private var ring: [(t: Double, jpeg: Data)] = []
   private var lastRing = -1.0, lastMovie = -1.0, lastLive = -1.0

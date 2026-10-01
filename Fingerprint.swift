@@ -5,7 +5,7 @@ import LocalAuthenticationEmbeddedUI
 /// Disarms with a finger resting on Touch ID from the countdown on, without the system dialog: the
 /// embedded Touch ID view sits in the frosted veil's window, which is key while armed (audit M6), or,
 /// with the veil switched off, in an invisible window of its own. Measured 2026-09-24: the finger only
-/// reaches a context whose view sits in the key window of the active app, so GuardMode takes focus from
+/// reaches a context whose view sits in the key window of the active app, so BRB takes focus from
 /// the countdown on and hands it back after.
 final class Fingerprint {
   private final class KeyWindow: NSWindow {
@@ -81,7 +81,7 @@ final class Fingerprint {
     // Fingerprint lives as long as GuardApp, so the closures hold it strongly.
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {  // the view is up first, as measured
       guard ctx === self.context else { return }
-      ctx.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: L("Disarm Guard Mode")) { ok, error in
+      ctx.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: L("Stop guarding")) { ok, error in
         DispatchQueue.main.async {
           guard ctx === self.context else { return }  // stopped or replaced
           if ok { self.onAccept(); return }

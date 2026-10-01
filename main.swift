@@ -19,7 +19,7 @@ func log(_ message: String) {
 
 /// launchd appends stdout to this file forever: past 10 MB, keep the last 1 MB (audit L8).
 func trimLog() {
-  let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/guard-mode.log")
+  let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/brb.log")
   guard let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue, size > 10_000_000,
         let file = try? FileHandle(forUpdating: url) else { return }
   defer { try? file.close() }
@@ -56,7 +56,7 @@ case nil:
   app.delegate = delegate
   app.run()
 default:
-  print("usage: guard-mode [selftest [--no-hardware] | sensors [s] | keys [s] | siren [s] | record [s] | camera [s] | push | live [s] | snapshot <stage> [png]]")
+  print("usage: brb [selftest [--no-hardware] | sensors [s] | keys [s] | siren [s] | record [s] | camera [s] | push | live [s] | snapshot <stage> [png]]")
   exit(2)
 }
 
@@ -171,7 +171,7 @@ func selftest(hardware: Bool) {
   check(StatusIcon.image(.idle).isTemplate && !StatusIcon.image(.armed).isTemplate, "only the idle shield follows the menu bar's color")
   check(Ease.fog(0) == 0 && Ease.fog(1) == 1 && Ease.fog(0.5) > 0.5 && Ease.melt(0.25) < Ease.melt(0.75), "timing curves")
 
-  let dir = FileManager.default.temporaryDirectory.appendingPathComponent("guard-mode-selftest-\(getpid())")
+  let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brb-selftest-\(getpid())")
   try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
   func clip(_ name: String, daysOld: Double, bytes: Int) -> URL {
     let url = dir.appendingPathComponent(name + ".mov")

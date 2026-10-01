@@ -24,28 +24,28 @@ jobs:
           plutil -lint Info.plist Resources/*.lproj/*.strings
           python3 scripts/check-strings.py
       - name: Selftest without hardware
-        run: build/GuardMode.app/Contents/MacOS/guard-mode selftest --no-hardware
+        run: build/BRB.app/Contents/MacOS/brb selftest --no-hardware
       - name: Check the relay's syntax
         run: cp relay/worker.js "$RUNNER_TEMP/worker.mjs" && node --check "$RUNNER_TEMP/worker.mjs"
       # What someone who downloads the repo goes through: a ZIP like GitHub's "Download ZIP"
       # (git archive keeps the executable bits), unpacked into a folder with a space in its name.
       - name: Install from a downloaded copy
         run: |
-          dir="$HOME/Downloads/Guard Mode download"
+          dir="$HOME/Downloads/BRB download"
           mkdir -p "$dir"
-          git archive --format=zip -o "$RUNNER_TEMP/guard-mode.zip" HEAD
-          unzip -q "$RUNNER_TEMP/guard-mode.zip" -d "$dir"
+          git archive --format=zip -o "$RUNNER_TEMP/brb.zip" HEAD
+          unzip -q "$RUNNER_TEMP/brb.zip" -d "$dir"
           cd "$dir"
           ./install.sh < /dev/null
           ./scripts/sleep-rule.sh
-          sudo cat /etc/sudoers.d/guard-mode
+          sudo cat /etc/sudoers.d/brb
           sleep 6
           launchctl print "gui/$(id -u)/com.allen.guard-mode" | grep -E "^\s*(state|pid|program) ="
           plutil -lint ~/Library/LaunchAgents/com.allen.guard-mode.plist
-          grep -q "$dir/build/GuardMode.app" ~/Library/LaunchAgents/com.allen.guard-mode.plist
+          grep -q "$dir/build/BRB.app" ~/Library/LaunchAgents/com.allen.guard-mode.plist
           launchctl print "gui/$(id -u)/com.allen.guard-mode" | grep -q "state = running"
-          tail -5 ~/Library/Logs/guard-mode.log
+          tail -5 ~/Library/Logs/brb.log
           ./uninstall.sh < /dev/null
           test ! -e ~/Library/LaunchAgents/com.allen.guard-mode.plist
           sleep 3  # bootout is async
-          ! pgrep -f "$dir/build/GuardMode.app"
+          ! pgrep -f "$dir/build/BRB.app"

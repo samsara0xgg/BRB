@@ -146,7 +146,7 @@ final class Veil {
   private func keepDisplayOn(_ on: Bool) {
     if on && awake == 0 {
       let result = IOPMAssertionCreateWithName("PreventUserIdleDisplaySleep" as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn),
-                                               "Guard Mode is guarding this Mac" as CFString, &awake)
+                                               "BRB is guarding this Mac" as CFString, &awake)
       if result != kIOReturnSuccess {
         log("display-sleep assertion failed: \(result)")
         awake = 0
@@ -484,7 +484,7 @@ struct VeilView: View {
 
   private var smallLine: String {
     switch model.stage {
-    case .countdown: L("Guard Mode starts in %ld s", model.remaining)
+    case .countdown: L("Guarding starts in %ld s", model.remaining)
     case .alarm: L("Alarm raised")
     case .welcome: model.welcome.title
     default: L("Please don't touch. This Mac is guarded.")
@@ -654,7 +654,7 @@ private struct NoticeView: View {
 
   private var countdownText: some View {
     VStack(spacing: 10) {
-      Text(L("Walk away. Guard Mode starts in %ld s", model.remaining))
+      Text(L("Walk away. Guarding starts in %ld s", model.remaining))
         .font(.system(size: 26, weight: .semibold))
       HStack(spacing: 6) {
         Text("esc")
