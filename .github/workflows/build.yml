@@ -49,3 +49,25 @@ jobs:
           test ! -e ~/Library/LaunchAgents/com.allen.guard-mode.plist
           sleep 3  # bootout is async
           ! pgrep -f "$dir/build/BRB.app"
+      # What someone who downloads BRB.dmg goes through, with an ad hoc signature in place of the
+      # notarized one scripts/release.sh makes on the author's Mac.
+      - name: Install from the disk image
+        run: |
+          LOCAL=1 scripts/release.sh
+          mnt="$RUNNER_TEMP/brb-dmg"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" dist/BRB.dmg > /dev/null
+          test -L "$mnt/Applications"
+          ditto "$mnt/BRB.app" /Applications/BRB.app
+          hdiutil detach -quiet "$mnt"
+          codesign -d --entitlements - /Applications/BRB.app 2>&1 | grep -q com.apple.security.device.camera
+          sudo /Applications/BRB.app/Contents/MacOS/brb lid-rule "$(id -un)" --no-prompt
+          sudo grep -q "^$(id -un) ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1" /etc/sudoers.d/brb
+          sudo visudo -cf /etc/sudoers.d/brb
+          sudo rm /etc/sudoers.d/brb
+          : > ~/Library/Logs/brb.log
+          open /Applications/BRB.app
+          sleep 6
+          pgrep -x brb
+          cat ~/Library/Logs/brb.log
+          grep -q "login items" ~/Library/Logs/brb.log
+          pkill -TERM -x brb

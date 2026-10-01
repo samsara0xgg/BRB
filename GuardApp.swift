@@ -1,6 +1,7 @@
 import AppKit
 import IOKit.ps
 import LocalAuthentication
+import ServiceManagement
 
 struct GuardError: Error, CustomStringConvertible {
   let description: String
@@ -39,6 +40,21 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   static let stateFile = supportDir.appendingPathComponent("phase")
   /// pmset calls in order, off the main thread (audit L5).
   static let pmsetQueue = DispatchQueue(label: "brb.pmset")
+
+  /// A copy dragged into Applications adds itself to the login items once; a copy built from
+  /// source has install.sh's LaunchAgent for that, which also restarts it.
+  private func openAtLogin() {
+    let agent = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/LaunchAgents/com.allen.guard-mode.plist")
+    guard Bundle.main.bundlePath.hasPrefix("/Applications/"), !FileManager.default.fileExists(atPath: agent.path),
+          !UserDefaults.standard.bool(forKey: "loginItemAdded") else { return }
+    do {
+      try SMAppService.mainApp.register()
+      UserDefaults.standard.set(true, forKey: "loginItemAdded")
+      log("added to the login items")
+    } catch {
+      log("not added to the login items: \(error)")
+    }
+  }
 
   /// The app was called Guard Mode until October 2026: its state and recordings move over once.
   static func moveOldFolders() {
@@ -117,6 +133,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     Recorder.prune()
     render()
     resume()
+    openAtLogin()
     if !Prefs.introSeen && phase == .idle {  // first launch: a menu-bar app is easy to miss
       DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
         guard let self, phase == .idle, !panel.isShown, let button = item.button else { return }
