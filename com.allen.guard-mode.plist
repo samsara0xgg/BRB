@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- A template: install.sh fills in __PROGRAM__ and __LOG__ and copies it to ~/Library/LaunchAgents. -->
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.allen.guard-mode</string>
   <key>ProgramArguments</key>
-  <array><string>/Users/alllllenshi/Projects/guard-mode/build/GuardMode.app/Contents/MacOS/guard-mode</string></array>
+  <array><string>__PROGRAM__</string></array>
   <key>RunAtLoad</key><true/>
   <!-- Relaunch after a crash or kill (a kill while armed resumes the alarm); Quit exits 0 and stays down. -->
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>ProcessType</key><string>Interactive</string>
-  <key>StandardOutPath</key><string>/Users/alllllenshi/Library/Logs/guard-mode.log</string>
-  <key>StandardErrorPath</key><string>/Users/alllllenshi/Library/Logs/guard-mode.log</string>
+  <key>StandardOutPath</key><string>__LOG__</string>
+  <key>StandardErrorPath</key><string>__LOG__</string>
 </dict>
 </plist>

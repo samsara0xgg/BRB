@@ -107,6 +107,12 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     Recorder.prune()
     render()
     resume()
+    if !Prefs.introSeen && phase == .idle {  // first launch: a menu-bar app is easy to miss
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+        guard let self, phase == .idle, !panel.isShown, let button = item.button else { return }
+        panel.toggle(from: button)
+      }
+    }
   }
 
   /// Quitting while armed would leave the Mac unguarded without anyone noticing (audit M1).

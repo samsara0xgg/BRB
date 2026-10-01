@@ -1,2 +1,0 @@
-# Lets GuardMode keep the Mac awake with the lid shut while armed, without a password prompt.
-alllllenshi ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0

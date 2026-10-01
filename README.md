@@ -9,6 +9,34 @@ the 10 seconds before and everything after, and tells your phone.
 
 Apple Silicon MacBooks, macOS 14 or later. On macOS 26 the notice is Liquid Glass.
 
+## Install
+
+You need a MacBook with Apple silicon, macOS 14 or later, and Apple's command line tools
+(`xcode-select --install`, if you don't have them yet).
+
+```sh
+git clone https://github.com/samsara0xgg/guard-mode.git
+cd guard-mode
+./install.sh
+```
+
+(Or **Code → Download ZIP**, unzip it, and run `./install.sh` in that folder.)
+
+`install.sh` builds the app, starts it now and at every login, and offers to install a one-line
+sudo rule (`scripts/sleep-rule.sh`, asks for your password once) that keeps the Mac awake with the
+lid shut while it guards. A shield appears in the menu bar and the panel opens by itself:
+
+1. **Three cards** say what it does, what it records, and how to stop it.
+2. **Try a silent run.** Guard Mode asks for Accessibility (to notice the keyboard and trackpad) and
+   the camera; the panel lists anything still missing, with a button to fix each one.
+3. **Touch the trackpad** once the screen has frosted over: it turns red and locks, as it would for
+   a stranger, but stays silent. Unlock, or rest a finger on Touch ID, to stop. Test mode switches
+   itself off afterwards.
+
+**How it works** at the bottom of the panel shows the cards again. `./uninstall.sh` removes it
+again (the lid rule too); recordings stay in `~/Movies/GuardMode/`. The log is at
+`~/Library/Logs/guard-mode.log`.
+
 ## What you see
 
 - **The menu-bar shield.** An outline when off. Amber rises through it during the 5 s countdown,
@@ -65,27 +93,11 @@ power button, so the power button waits 400 ms for the finger before it counts.
   keeps its messages; the panel's link keeps working. **Reset link** in the panel makes the old
   one stop working and forgets what the relay kept.
 
-The page runs on the relay in `relay/`, a Cloudflare Worker. **This version needs the relay
-redeployed** (`cd relay && npx wrangler deploy`); until then the old page keeps working with the
-new app, without photos or the timeline. Optionally set `CAM_IDS` on the Worker to the room ids
-allowed to connect.
-
-## Setup
-
-1. The sudo rule, so guarding keeps the Mac awake with the lid shut (`pmset disablesleep`). The
-   first command validates the file; install it only after it prints `parsed OK`. The panel can
-   copy these commands for you.
-
-   ```sh
-   cd ~/Projects/guard-mode
-   sudo visudo -cf guard-mode.sudoers
-   sudo install -m 0440 -o root -g wheel guard-mode.sudoers /etc/sudoers.d/guard-mode
-   ```
-
-2. `./install.sh` builds (`build.sh`), signs with your Apple Development certificate, and loads
-   the LaunchAgent `com.allen.guard-mode`. The log is at `~/Library/Logs/guard-mode.log` (trimmed
-   past 10 MB).
-3. Click the shield. The panel asks for Accessibility and the camera.
+The page runs on the relay in `relay/`, a Cloudflare Worker; out of the box the app uses the
+author's. To run your own: `cd relay && npx wrangler deploy`, then
+`defaults write com.allen.guard-mode relayHost <your-worker>.workers.dev` and restart Guard Mode.
+Optionally set `CAM_IDS` on the Worker to the room ids allowed to connect (the part of the panel's
+phone link after `/v/`).
 
 ## Commands
 
@@ -160,5 +172,5 @@ restores the volume and lets the Mac sleep again, and the app stays down:
 launchctl bootout gui/$(id -u)/com.allen.guard-mode
 ```
 
-`./install.sh` brings it back. If the Mac still won't sleep with the lid shut, run
+`./install.sh` brings it back, and `./uninstall.sh` removes it for good. If the Mac still won't sleep with the lid shut, run
 `sudo pmset -a disablesleep 0`. Quitting from the panel works only while it isn't guarding.

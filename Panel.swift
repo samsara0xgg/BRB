@@ -25,7 +25,7 @@ final class Panel {
 
   func toggle(from button: NSStatusBarButton) {
     if popover.isShown { close(); return }
-    model.page = .main
+    model.page = Prefs.introSeen ? .main : .intro
     model.refresh()
     NSApp.activate(ignoringOtherApps: true)  // an accessory app's text field needs this for typing
     popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -110,13 +110,14 @@ enum Preflight {
   /// The Terminal command that installs the rule, from the folder the app was built in.
   static var sleepRuleCommand: String {
     let repo = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().path
-    return "cd '\(repo)' && sudo visudo -cf guard-mode.sudoers && sudo install -m 0440 -o root -g wheel guard-mode.sudoers /etc/sudoers.d/guard-mode"
+    return "'\(repo)/scripts/sleep-rule.sh'"
   }
 }
 
 final class PanelModel: ObservableObject {
-  enum Page { case main, notReady, push, live }
-  @Published var page = Page.main
+  enum Page { case intro, main, notReady, push, live }
+  @Published var page = Page.main { didSet { if page == .intro && oldValue != .intro { introStep = 0 } } }
+  @Published var introStep = 0
   @Published var phase = GuardApp.Phase.idle
   @Published var checks: [Check] = []
   @Published var place = Prefs.place { didSet { Prefs.place = place } }
@@ -175,6 +176,16 @@ final class PanelModel: ObservableObject {
     }
     onClose()
     onArm()
+  }
+
+  /// The end of the introduction: either straight to a silent first run (via the readiness list
+  /// when something is missing), or to the panel.
+  func finishIntro(tryIt: Bool) {
+    Prefs.introSeen = true
+    page = .main
+    guard tryIt else { return }
+    testMode = true
+    arm()
   }
 
   func fix(_ check: Check) {
@@ -253,6 +264,7 @@ struct PanelView: View {
   var body: some View {
     Group {
       switch model.page {
+      case .intro: IntroPage(model: model)
       case .main: MainPage(model: model)
       case .notReady: NotReadyPage(model: model)
       case .push: PushPage(model: model)
@@ -308,11 +320,15 @@ private struct MainPage: View {
           recent
         }
         Divider()
-        Button(L("Quit Guard Mode")) { NSApp.terminate(nil) }
-          .buttonStyle(.plain)
-          .foregroundStyle(.secondary)
-          .font(.system(size: 12))
-          .padding(.horizontal, 6)
+        HStack {
+          Button(L("How it works")) { model.page = .intro }
+          Spacer()
+          Button(L("Quit Guard Mode")) { NSApp.terminate(nil) }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .font(.system(size: 12))
+        .padding(.horizontal, 6)
       } else {
         guarding
       }
@@ -490,6 +506,94 @@ private struct Pressable: ButtonStyle {
     configuration.label
       .scaleEffect(configuration.isPressed ? 0.97 : 1)
       .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+  }
+}
+
+/// Three cards on first launch: what it does, what it records, how to stop it. The last one offers a
+/// silent first run, so the first alarm anyone hears is never a surprise.
+private struct IntroPage: View {
+  @ObservedObject var model: PanelModel
+  private var step: Int { model.introStep }
+
+  private struct Card {
+    let look: ShieldGlyph.Look
+    let title: String
+    let text: String
+  }
+
+  private var cards: [Card] {
+    [
+      Card(look: .guarding, title: L("Start it before you step away"),
+           text: L("Every screen frosts over and asks people not to touch. Lifting, tilting or closing the Mac, a key or a click sounds the alarm.")),
+      Card(look: .alarm, title: L("Walking by isn't recorded"),
+           text: L("The camera keeps only the last 10 seconds, in memory. They are saved, with the faces behind the person blurred, only when someone touches the Mac.")),
+      Card(look: .clear, title: L("Back? Rest a finger on Touch ID"),
+           text: L("Touch ID or unlocking the Mac stops it. Try it once in test mode first: nothing makes a sound.")),
+    ]
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      HStack {
+        Text(L("Welcome to Guard Mode")).font(.system(size: 14.5, weight: .semibold))
+        Spacer()
+        Text(L("%ld of %ld", step + 1, cards.count)).font(.system(size: 11.5)).monospacedDigit().foregroundStyle(.secondary)
+      }
+      .padding(.horizontal, 4)
+      HStack(alignment: .top, spacing: 14) {
+        ZStack {
+          Circle().fill(LinearGradient(colors: [Color(red: 0x2B / 255, green: 0x3A / 255, blue: 0x6B / 255), Color(red: 0x13 / 255, green: 0x1A / 255, blue: 0x33 / 255)],
+                                       startPoint: .topLeading, endPoint: .bottomTrailing))
+          ShieldGlyph(look: cards[step].look).frame(width: 30, height: 30)
+        }
+        .frame(width: 56, height: 56)
+        VStack(alignment: .leading, spacing: 5) {
+          Text(cards[step].title).font(.system(size: 15, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
+          Text(cards[step].text).font(.system(size: 12.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+      }
+      .padding(14)
+      .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+      .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.primary.opacity(0.045)))
+      .id(step)
+      .transition(.opacity)
+      HStack(spacing: 6) {
+        ForEach(0..<cards.count, id: \.self) { i in
+          Capsule().fill(i == step ? amberDeep : Color.primary.opacity(0.15)).frame(width: i == step ? 16 : 6, height: 6)
+        }
+      }
+      .frame(maxWidth: .infinity)
+      .animation(.easeOut(duration: 0.2), value: step)
+      HStack {
+        Button(step == 0 ? L("Skip") : L("Back")) {
+          if step == 0 { model.finishIntro(tryIt: false) } else { withAnimation(.easeOut(duration: 0.2)) { model.introStep -= 1 } }
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .font(.system(size: 12.5))
+        Spacer()
+        Button {
+          if step < cards.count - 1 { withAnimation(.easeOut(duration: 0.2)) { model.introStep += 1 } } else { model.finishIntro(tryIt: true) }
+        } label: {
+          Text(step < cards.count - 1 ? L("Next") : L("Try a silent run"))
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(ink)
+            .padding(.horizontal, 16)
+            .frame(height: 32)
+            .background(Capsule().fill(LinearGradient(colors: [Color(red: 1, green: 0xCF / 255, blue: 0x6B / 255), amberDeep], startPoint: .top, endPoint: .bottom)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(Pressable())
+        .keyboardShortcut(.defaultAction)
+      }
+      .padding(.horizontal, 4)
+      if step == cards.count - 1 {
+        Text(L("Guard Mode asks for Accessibility and the camera on the way."))
+          .font(.system(size: 11))
+          .foregroundStyle(.tertiary)
+          .padding(.horizontal, 4)
+      }
+    }
   }
 }
 
