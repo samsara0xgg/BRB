@@ -1,8 +1,10 @@
 # BRB
 
+**Be right back，马上回来。** 去买杯咖啡、接个电话、上个洗手间，MacBook 就放在桌上，BRB 替你看着，等你回来。
+
 [English](README.md)
 
-BRB（be right back，马上回来）是把 MacBook 留在图书馆或咖啡馆桌上时用的菜单栏小工具。警戒时每块屏幕都变成磨砂玻璃，上面只有一句话：请勿触碰。路过不会被录下；一旦有人碰它，屏幕从被碰的地方泛红、锁屏、报警，存下碰之前 10 秒和之后的画面，并通知你的手机。
+BRB 是把 MacBook 留在图书馆或咖啡馆桌上时用的菜单栏小工具。警戒时每块屏幕都变成磨砂玻璃，上面只有一句话：请勿触碰。路过不会被录下；一旦有人碰它，屏幕从被碰的地方泛红、锁屏、报警，存下碰之前 10 秒和之后的画面，并通知你的手机。
 
 需要 Apple 芯片的 MacBook，macOS 14 或更新。在 macOS 26 上提示牌是液态玻璃（Liquid Glass）。
 
@@ -11,8 +13,8 @@ BRB（be right back，马上回来）是把 MacBook 留在图书馆或咖啡馆�
 需要 Apple 芯片的 MacBook、macOS 14 或更新，以及 Apple 的命令行工具（还没装的话运行 `xcode-select --install`）。
 
 ```sh
-git clone https://github.com/samsara0xgg/guard-mode.git
-cd guard-mode
+git clone https://github.com/samsara0xgg/BRB.git
+cd BRB
 ./install.sh
 ```
 

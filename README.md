@@ -1,8 +1,11 @@
 # BRB
 
+**Be right back.** Off for a coffee, a call or the restroom? Leave your MacBook on the table.
+BRB keeps watch until you're back.
+
 [中文说明](README.zh-CN.md)
 
-BRB (be right back) is a menu-bar guard for leaving a MacBook on a library or café table. While it guards, every screen
+BRB is a menu-bar guard for leaving a MacBook on a library or café table. While it guards, every screen
 turns to frosted glass with one line on it: please don't touch. Walking past records nothing.
 Touching it floods the screen red from where it was touched, locks it, sounds the alarm, saves
 the 10 seconds before and everything after, and tells your phone.
@@ -15,8 +18,8 @@ You need a MacBook with Apple silicon, macOS 14 or later, and Apple's command li
 (`xcode-select --install`, if you don't have them yet).
 
 ```sh
-git clone https://github.com/samsara0xgg/guard-mode.git
-cd guard-mode
+git clone https://github.com/samsara0xgg/BRB.git
+cd BRB
 ./install.sh
 ```
 
