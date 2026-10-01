@@ -61,6 +61,7 @@ case "lid-rule":  // as root with --no-prompt (CI), or as the user behind the pa
   let user = args.count > 1 && !args[1].hasPrefix("-") ? args[1] : NSUserName()
   Preflight.installSleepRule(user: user, admin: !args.contains("--no-prompt")) { exit($0 ? 0 : 1) }
   RunLoop.main.run()
+case "dmg-background": exit(args.count > 1 && DiskImage.writeBackground(to: args[1]) ? 0 : 1)
 case "snapshot": snapshotCommand(args.count > 1 ? args[1] : "armed", out: args.count > 2 && !args[2].hasPrefix("-") ? args[2] : nil)
 case nil:
   logToFile()
@@ -71,7 +72,7 @@ case nil:
   app.delegate = delegate
   app.run()
 default:
-  print("usage: brb [selftest [--no-hardware] | sensors [s] | keys [s] | siren [s] | record [s] | camera [s] | push | live [s] | lid-rule [user] [--no-prompt] | snapshot <stage> [png]]")
+  print("usage: brb [selftest [--no-hardware] | sensors [s] | keys [s] | siren [s] | record [s] | camera [s] | push | live [s] | lid-rule [user] [--no-prompt] | dmg-background <out> | snapshot <stage> [png]]")
   exit(2)
 }
 
