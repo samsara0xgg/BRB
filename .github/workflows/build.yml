@@ -12,7 +12,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 20
     permissions:
-      contents: write  # temporary: the review screenshots below
+      contents: read
     steps:
       - uses: actions/checkout@v5
       - name: Toolchain
@@ -71,31 +71,3 @@ jobs:
           cat ~/Library/Logs/brb.log
           grep -q "login items" ~/Library/Logs/brb.log
           pkill -TERM -x brb
-      # Temporary, for reviewing the disk image's window and the first launch: pushed to ci-shots.
-      - name: Screenshots
-        if: github.event_name == 'pull_request'
-        continue-on-error: true
-        run: |
-          mkdir -p shots
-          cp build/dmg-background@2x.png shots/
-          open dist/BRB.dmg
-          sleep 6
-          screencapture -x -t jpg shots/dmg-light.jpg
-          osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true' || true
-          sleep 3
-          screencapture -x -t jpg shots/dmg-dark.jpg
-          osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to false' || true
-          hdiutil detach -quiet /Volumes/BRB || true
-          open /Applications/BRB.app
-          sleep 5
-          screencapture -x -t jpg shots/first-open.jpg
-          osascript -e 'tell application "Finder" to activate' || true
-          sleep 2
-          screencapture -x -t jpg shots/panel-closed.jpg
-          open /Applications/BRB.app
-          sleep 3
-          screencapture -x -t jpg shots/reopen.jpg
-          pkill -TERM -x brb || true
-          cd shots
-          git init -q && git checkout -q -b ci-shots && git add . && git -c user.name=ci -c user.email=ci@localhost commit -qm "screenshots ${{ github.sha }}"
-          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-shots
