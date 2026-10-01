@@ -32,7 +32,7 @@
 "Turned off for BRB in System Settings" = "系统设置里关掉了 BRB 的摄像头权限";
 "Stay awake with the lid shut" = "合盖不睡眠";
 "Keeps guarding with the lid closed" = "合上盖子也继续警戒";
-"Needs an admin rule, installed once from Terminal" = "需要在终端里装一次管理员规则";
+"Needs an admin rule, installed once with your password" = "需要装一次管理员规则，输一次密码就好";
 "Speakers" = "喇叭";
 "The siren plays on the built-in speakers" = "警笛从电脑自带的喇叭播放";
 "No built-in speakers found" = "找不到电脑自带的喇叭";
@@ -83,7 +83,9 @@
 "Open Settings" = "打开设置";
 "Allow" = "允许";
 "Copied" = "已复制";
-"Copy command" = "复制命令";
+"Install" = "安装";
+"Installing…" = "正在安装…";
+"BRB keeps the Mac awake with the lid shut while it guards." = "BRB 警戒时，合上盖子电脑也保持唤醒。";
 "Set up" = "设置";
 "Send alerts to my phone" = "报警时通知手机";
 "An alarm sends what happened and a photo" = "报警时发送经过和一张照片";

@@ -2,7 +2,7 @@
 
 **Be right back，马上回来。** 去买杯咖啡、接个电话、上个洗手间，MacBook 就放在桌上，BRB 替你看着，等你回来。
 
-[English](README.md)
+**[下载 BRB.dmg](https://github.com/samsara0xgg/BRB/releases/latest/download/BRB.dmg)** · [English](README.md)
 
 BRB 是把 MacBook 留在图书馆或咖啡馆桌上时用的菜单栏小工具。警戒时每块屏幕都变成磨砂玻璃，上面只有一句话：请勿触碰。路过不会被录下；一旦有人碰它，屏幕从被碰的地方泛红、锁屏、报警，存下碰之前 10 秒和之后的画面，并通知你的手机。
 
@@ -10,7 +10,17 @@ BRB 是把 MacBook 留在图书馆或咖啡馆桌上时用的菜单栏小工具�
 
 ## 安装
 
-需要 Apple 芯片的 MacBook、macOS 14 或更新，以及 Apple 的命令行工具（还没装的话运行 `xcode-select --install`）。
+[下载 BRB.dmg](https://github.com/samsara0xgg/BRB/releases/latest/download/BRB.dmg)，打开后把 **BRB** 拖进 **应用程序**，再从那里打开。需要 Apple 芯片的 MacBook，macOS 14 或更新。菜单栏会出现一个盾牌，BRB 会把自己加进登录项，面板会自己打开：
+
+1. **三张卡片**，讲清它做什么、录什么、怎么停下。
+2. **静音试一次。** 过程中会请你允许辅助功能（用来发现键盘和触控板被碰）和摄像头；还缺什么，面板会列出来，每一项都有修复按钮。合上盖子也不睡眠需要一条管理员规则，输一次密码就装好。
+3. **等屏幕变成磨砂后碰一下触控板**：屏幕会像陌生人碰到时那样泛红并锁屏，只是不出声。解锁或把手指放在触控 ID 上就能停下。测试模式用完会自动关闭。
+
+面板底部的 **使用说明** 可以再看一遍卡片。想删掉 BRB：在面板里退出，把它拖进废纸篓，再运行 `sudo rm /etc/sudoers.d/brb` 删掉那条规则。录像留在 `~/Movies/BRB/`，日志在 `~/Library/Logs/brb.log`。
+
+### 从源码安装
+
+还需要 Apple 的命令行工具（还没装的话运行 `xcode-select --install`）。
 
 ```sh
 git clone https://github.com/samsara0xgg/BRB.git
@@ -18,15 +28,7 @@ cd BRB
 ./install.sh
 ```
 
-（也可以点 **Code → Download ZIP**，解压后在那个文件夹里运行 `./install.sh`。）
-
-`install.sh` 会构建 App，马上启动并设为每次登录自动启动，然后问你要不要装一条 sudo 规则（`scripts/sleep-rule.sh`，只需输入一次密码），让警戒时合上盖子电脑也不睡眠。菜单栏会出现一个盾牌，面板会自己打开：
-
-1. **三张卡片**，讲清它做什么、录什么、怎么停下。
-2. **静音试一次。** 过程中会请你允许辅助功能（用来发现键盘和触控板被碰）和摄像头；还缺什么，面板会列出来，每一项都有修复按钮。
-3. **等屏幕变成磨砂后碰一下触控板**：屏幕会像陌生人碰到时那样泛红并锁屏，只是不出声。解锁或把手指放在触控 ID 上就能停下。测试模式用完会自动关闭。
-
-面板底部的 **使用说明** 可以再看一遍卡片。`./uninstall.sh` 会把它卸掉（包括那条 sudo 规则），录像留在 `~/Movies/BRB/`。日志在 `~/Library/Logs/brb.log`。
+`install.sh` 会构建 App，马上启动并设为每次登录自动启动（崩溃或被杀掉后也会重新启动），然后问你要不要装那条规则。`./uninstall.sh` 会把两者都删掉，录像会保留。
 
 ## 你会看到什么
 
@@ -86,7 +88,9 @@ cd BRB
 
 ## 开发
 
-`./build.sh` 构建 `build/BRB.app`；`SIGN_IDENTITY=-` 用临时签名。CI（`.github/workflows/build.yml`，macOS 26）会构建、检查 plist 和文案、跑 `selftest --no-hardware`、检查中继语法；只在 PR 和 `main` 上跑。
+`./build.sh` 构建 `build/BRB.app`；`SIGN_IDENTITY=-` 用临时签名。CI（`.github/workflows/build.yml`，macOS 26）会构建、检查 plist 和文案、跑 `selftest --no-hardware`、检查中继语法；只在 PR 和 `main` 上跑。它还会从下载的源码副本安装一遍，并用临时签名打出磁盘映像、从 `/Applications` 运行 BRB。
+
+`scripts/release.sh` 发布下载版：用你的 Developer ID 和强化运行时签名，给 App 和磁盘映像做公证，再按 `Info.plist` 里的版本号建 GitHub Release。需要证书、notarytool 钥匙串配置（`NOTARY_PROFILE`）和 GitHub CLI；先把 `CFBundleShortVersionString` 和 `CFBundleVersion` 调高。
 
 ## 还要在真机上确认的
 
@@ -122,4 +126,4 @@ cd BRB
 launchctl bootout gui/$(id -u)/com.allen.guard-mode
 ```
 
-`./install.sh` 可以再装回来，`./uninstall.sh` 会彻底卸掉。如果合盖后电脑还是不睡，运行 `sudo pmset -a disablesleep 0`。面板里的退出只在没有警戒时可用。
+`./install.sh` 可以再装回来，`./uninstall.sh` 会彻底卸掉。装在「应用程序」里的那份，用 `pkill -TERM -x brb` 效果和 `bootout` 一样。如果合盖后电脑还是不睡，运行 `sudo pmset -a disablesleep 0`。面板里的退出只在没有警戒时可用。

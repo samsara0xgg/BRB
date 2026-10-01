@@ -79,7 +79,7 @@ enum Preflight {
                   : status == .notDetermined ? L("Allow it so an alarm can be recorded") : L("Turned off for BRB in System Settings"),
                 ok: camera && status == .authorized, optional: !camera, askable: camera && status == .notDetermined),
           Check(id: .sleep, title: L("Stay awake with the lid shut"),
-                detail: sleep ? L("Keeps guarding with the lid closed") : L("Needs an admin rule, installed once from Terminal"), ok: sleep),
+                detail: sleep ? L("Keeps guarding with the lid closed") : L("Needs an admin rule, installed once with your password"), ok: sleep),
           Check(id: .speakers, title: L("Speakers"),
                 detail: speakers ? L("The siren plays on the built-in speakers") : L("No built-in speakers found"), ok: speakers),
           Check(id: .touchID, title: L("Touch ID"),
@@ -107,10 +107,35 @@ enum Preflight {
     return p.terminationStatus == 0
   }
 
-  /// The Terminal command that installs the rule, from the folder the app was built in.
-  static var sleepRuleCommand: String {
-    let repo = Bundle.main.bundleURL.deletingLastPathComponent().deletingLastPathComponent().path
-    return "'\(repo)/scripts/sleep-rule.sh'"
+  /// The AppleScript that installs the rule behind the system's password prompt, so nobody needs
+  /// Terminal. `admin: false` leaves the prompt out, for a caller that is already root (CI).
+  static func sleepRuleScript(user: String, admin: Bool = true) -> String? {
+    guard user.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil else { return nil }
+    let rule = "\(user) ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1, /usr/bin/pmset -a disablesleep 0"
+    let sh = "t=$(/usr/bin/mktemp) && printf '%s\\n' '\(rule)' > \"$t\" && /usr/sbin/visudo -cf \"$t\" > /dev/null"
+      + " && /usr/bin/install -m 0440 -o root -g wheel \"$t\" /etc/sudoers.d/brb && rm -f \"$t\" /etc/sudoers.d/guard-mode"
+    func quoted(_ s: String) -> String {
+      "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    }
+    let prompt = admin ? " with prompt " + quoted(L("BRB keeps the Mac awake with the lid shut while it guards.")) + " with administrator privileges" : ""
+    return "do shell script " + quoted(sh) + prompt
+  }
+
+  static func installSleepRule(user: String = NSUserName(), admin: Bool = true, _ done: @escaping (Bool) -> Void) {
+    guard let script = sleepRuleScript(user: user, admin: admin) else { return done(false) }
+    DispatchQueue.global(qos: .userInitiated).async {
+      let p = Process()
+      p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+      p.arguments = ["-e", script]
+      p.standardOutput = FileHandle.nullDevice
+      var ok = false
+      if (try? p.run()) != nil {
+        p.waitUntilExit()
+        ok = p.terminationStatus == 0
+      }
+      log("lid rule \(ok ? "installed" : "not installed")")
+      DispatchQueue.main.async { done(ok) }
+    }
   }
 }
 
@@ -141,6 +166,7 @@ final class PanelModel: ObservableObject {
   @Published var testPush: Bool?  // nil: not sent, or sending
   @Published var sending = false
   @Published var copied: String?
+  @Published var installing = false
   @Published var confirmReset = false
   @Published var liveLink = Live.link.absoluteString
   var onArm: () -> Void = {}
@@ -200,7 +226,11 @@ final class PanelModel: ObservableObject {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_Camera")
       }
     case .sleep:
-      copy(Preflight.sleepRuleCommand, as: "sleep")
+      installing = true
+      Preflight.installSleepRule { [weak self] _ in
+        self?.installing = false
+        self?.refreshChecks()
+      }
     case .push:
       page = .push
     default:
@@ -609,7 +639,7 @@ private struct NotReadyPage: View {
         .fixedSize(horizontal: false, vertical: true)
       VStack(spacing: 0) {
         ForEach(model.checks.filter(\.shown)) { check in
-          CheckRow(check: check, copied: model.copied == "sleep" && check.id == .sleep) { model.fix(check) }
+          CheckRow(check: check, busy: model.installing && check.id == .sleep) { model.fix(check) }
           if check.id != model.checks.filter(\.shown).last?.id { Divider().padding(.leading, 30) }
         }
       }
@@ -626,7 +656,7 @@ private struct NotReadyPage: View {
 
 private struct CheckRow: View {
   let check: Check
-  let copied: Bool
+  let busy: Bool
   let fix: () -> Void
 
   var body: some View {
@@ -644,7 +674,7 @@ private struct CheckRow: View {
       }
       Spacer(minLength: 6)
       if let label = fixLabel {
-        Button(label, action: fix).controlSize(.small)
+        Button(label, action: fix).controlSize(.small).disabled(busy)
       }
     }
     .padding(.vertical, 8)
@@ -655,7 +685,7 @@ private struct CheckRow: View {
     switch check.id {
     case .accessibility: return L("Open Settings")
     case .camera: return check.optional ? nil : check.askable ? L("Allow") : L("Open Settings")
-    case .sleep: return copied ? L("Copied") : L("Copy command")
+    case .sleep: return busy ? L("Installing…") : L("Install")
     case .push: return L("Set up")
     default: return nil
     }

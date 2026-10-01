@@ -3,7 +3,7 @@
 **Be right back.** Off for a coffee, a call or the restroom? Leave your MacBook on the table.
 BRB keeps watch until you're back.
 
-[中文说明](README.zh-CN.md)
+**[Download BRB.dmg](https://github.com/samsara0xgg/BRB/releases/latest/download/BRB.dmg)** · [中文说明](README.zh-CN.md)
 
 BRB is a menu-bar guard for leaving a MacBook on a library or café table. While it guards, every screen
 turns to frosted glass with one line on it: please don't touch. Walking past records nothing.
@@ -14,8 +14,25 @@ Apple Silicon MacBooks, macOS 14 or later. On macOS 26 the notice is Liquid Glas
 
 ## Install
 
-You need a MacBook with Apple silicon, macOS 14 or later, and Apple's command line tools
-(`xcode-select --install`, if you don't have them yet).
+[Download BRB.dmg](https://github.com/samsara0xgg/BRB/releases/latest/download/BRB.dmg), open it, drag **BRB** into **Applications** and open it from there.
+It needs a MacBook with Apple silicon and macOS 14 or later. A shield appears in the menu bar, BRB
+adds itself to your login items, and the panel opens by itself:
+
+1. **Three cards** say what it does, what it records, and how to stop it.
+2. **Try a silent run.** BRB asks for Accessibility (to notice the keyboard and trackpad) and
+   the camera; the panel lists anything still missing, with a button to fix each one. Keeping the
+   Mac awake with the lid shut needs a one-line admin rule, installed with your password once.
+3. **Touch the trackpad** once the screen has frosted over: it turns red and locks, as it would for
+   a stranger, but stays silent. Unlock, or rest a finger on Touch ID, to stop. Test mode switches
+   itself off afterwards.
+
+**How it works** at the bottom of the panel shows the cards again. To remove BRB, quit it from the
+panel, drag it to the Trash, and remove the lid rule with `sudo rm /etc/sudoers.d/brb`. Recordings
+stay in `~/Movies/BRB/`. The log is at `~/Library/Logs/brb.log`.
+
+### From source
+
+You also need Apple's command line tools (`xcode-select --install`, if you don't have them yet).
 
 ```sh
 git clone https://github.com/samsara0xgg/BRB.git
@@ -23,22 +40,8 @@ cd BRB
 ./install.sh
 ```
 
-(Or **Code → Download ZIP**, unzip it, and run `./install.sh` in that folder.)
-
-`install.sh` builds the app, starts it now and at every login, and offers to install a one-line
-sudo rule (`scripts/sleep-rule.sh`, asks for your password once) that keeps the Mac awake with the
-lid shut while it guards. A shield appears in the menu bar and the panel opens by itself:
-
-1. **Three cards** say what it does, what it records, and how to stop it.
-2. **Try a silent run.** BRB asks for Accessibility (to notice the keyboard and trackpad) and
-   the camera; the panel lists anything still missing, with a button to fix each one.
-3. **Touch the trackpad** once the screen has frosted over: it turns red and locks, as it would for
-   a stranger, but stays silent. Unlock, or rest a finger on Touch ID, to stop. Test mode switches
-   itself off afterwards.
-
-**How it works** at the bottom of the panel shows the cards again. `./uninstall.sh` removes it
-again (the lid rule too); recordings stay in `~/Movies/BRB/`. The log is at
-`~/Library/Logs/brb.log`.
+`install.sh` builds the app, starts it now and at every login (and again after a crash or a kill),
+and offers to install the lid rule. `./uninstall.sh` removes both; recordings stay.
 
 ## What you see
 
@@ -132,7 +135,14 @@ arguments differ.
 
 `./build.sh` builds `build/BRB.app`; `SIGN_IDENTITY=-` signs ad hoc. CI
 (`.github/workflows/build.yml`, macOS 26) builds, lints the plists and strings, runs
-`selftest --no-hardware`, and checks the relay's syntax, on pull requests and `main` only.
+`selftest --no-hardware`, and checks the relay's syntax, on pull requests and `main` only. It also
+installs from a downloaded copy of the source, and builds the disk image ad hoc and runs BRB from
+`/Applications`.
+
+`scripts/release.sh` publishes the download: it signs BRB with your Developer ID and the hardened
+runtime, notarizes the app and the disk image, and makes the GitHub release for the version in
+`Info.plist`. It needs the certificate, a notarytool keychain profile (`NOTARY_PROFILE`) and the
+GitHub CLI; bump `CFBundleShortVersionString` and `CFBundleVersion` first.
 
 ## Still to check on a real Mac
 
@@ -175,5 +185,6 @@ restores the volume and lets the Mac sleep again, and the app stays down:
 launchctl bootout gui/$(id -u)/com.allen.guard-mode
 ```
 
-`./install.sh` brings it back, and `./uninstall.sh` removes it for good. If the Mac still won't sleep with the lid shut, run
+`./install.sh` brings it back, and `./uninstall.sh` removes it for good. For the copy in
+Applications, `pkill -TERM -x brb` does the same as `bootout`. If the Mac still won't sleep with the lid shut, run
 `sudo pmset -a disablesleep 0`. Quitting from the panel works only while it isn't guarding.

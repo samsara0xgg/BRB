@@ -19,6 +19,7 @@ if [ -z "$identity" ]; then
     identity=-
   fi
 fi
-codesign -f -s "$identity" "$app"
+# SIGN_FLAGS: extra codesign flags, such as the hardened runtime scripts/release.sh asks for.
+codesign -f -s "$identity" --entitlements BRB.entitlements ${SIGN_FLAGS:-} "$app"
 [ "$identity" = - ] && echo "signed ad hoc (no Apple Development certificate found)"
 echo "built $app"
