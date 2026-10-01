@@ -36,7 +36,7 @@ struct Vec3 {
 /// "The laptop is being taken": it ends up clearly re-oriented, or it keeps moving for about a
 /// second (lifted and carried). A bump, a knock series or a brief nudge that settles is ignored
 /// on purpose (Allen, 2026-09-24: a short wobble that does not continue is safe).
-/// Knobs are calibrated by hand with `guard-mode sensors`; `Place` adjusts them per setting.
+/// Knobs are calibrated by hand with `brb sensors`; `Place` adjusts them per setting.
 struct MotionDetector {
   var tiltLimit = 15.0        // degrees away from the orientation captured at arming
   var shakeLimit = 0.05       // g of acceleration beyond gravity that counts as moving

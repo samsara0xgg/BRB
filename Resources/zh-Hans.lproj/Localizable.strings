@@ -1,7 +1,7 @@
 /* Chinese (Simplified). The keys are the English copy in the Swift sources; scripts/check-strings.py keeps the two in step. */
 
 /* Veil.swift */
-"Guard Mode starts in %ld s" = "%ld 秒后开始警戒";
+"Guarding starts in %ld s" = "%ld 秒后开始警戒";
 "Alarm raised" = "已报警";
 "Please don't touch. This Mac is guarded." = "请勿触碰，这台电脑正在警戒。";
 "Please don't touch" = "请勿触碰";
@@ -13,7 +13,7 @@
 "Walking by isn't recorded. Touching it is." = "路过不会被录下，碰它才会录像";
 "Not recording this time" = "这次不会录像";
 "Recording" = "正在录像";
-"Walk away. Guard Mode starts in %ld s" = "离开吧，%ld 秒后开始警戒";
+"Walk away. Guarding starts in %ld s" = "离开吧，%ld 秒后开始警戒";
 "cancels · or rest a finger on Touch ID" = "取消 · 或把手指轻放在指纹键上";
 "Test mode: this run stays silent" = "测试模式：这次不出声";
 /* The notice's footer is in the other language, for whoever does not read this one. */
@@ -29,7 +29,7 @@
 "No built-in camera: an alarm won't be recorded" = "没有内置摄像头：报警时不会录像";
 "Films only around an alarm" = "只在报警前后录像";
 "Allow it so an alarm can be recorded" = "允许后，报警时才能录像";
-"Turned off for GuardMode in System Settings" = "系统设置里关掉了 GuardMode 的摄像头权限";
+"Turned off for BRB in System Settings" = "系统设置里关掉了 BRB 的摄像头权限";
 "Stay awake with the lid shut" = "合盖不睡眠";
 "Keeps guarding with the lid closed" = "合上盖子也继续警戒";
 "Needs an admin rule, installed once from Terminal" = "需要在终端里装一次管理员规则";
@@ -51,7 +51,7 @@
 "After an alarm only" = "报警后才能看";
 "Recordings" = "录像";
 "Only around alarms · %ld" = "只录报警前后 · %ld";
-"Quit Guard Mode" = "退出警戒模式";
+"Quit BRB" = "退出 BRB";
 "Ready" = "就绪";
 "Not ready" = "未就绪";
 "Checking…" = "检查中…";
@@ -77,7 +77,7 @@
 "This Mac is guarded" = "这台电脑正在警戒";
 "Rest a finger on Touch ID, or unlock the Mac, to stop" = "手指放在触控 ID 上，或解锁电脑，即可停止";
 "Before guarding" = "开始警戒之前";
-"Guard Mode starts once everything marked below is fixed." = "处理好下面标出的项目，就能开始警戒。";
+"Guarding starts once everything marked below is fixed." = "处理好下面标出的项目，就能开始警戒。";
 "Check again" = "重新检查";
 "optional" = "可选";
 "Open Settings" = "打开设置";
@@ -104,8 +104,8 @@
 
 /* GuardApp.swift */
 "The motion sensor stopped. The lid, the charger and touch still count." = "运动传感器停了。合盖、拔电源和触碰仍会报警。";
-"Disarm Guard Mode" = "解除警戒模式";
-"Guard Mode is off" = "警戒模式已关闭";
+"Stop guarding" = "解除警戒";
+"Not guarding" = "未在警戒";
 
 /* Push.swift */
 "%@ · Siren on" = "%@ · 警笛已响";
@@ -114,10 +114,10 @@
 "It's been 10 s and nobody has disarmed it" = "已经响了 10 秒，还没有人解除";
 "Disarmed" = "已解除";
 "%@ · %@" = "%@ · %@";
-"Guard Mode needs a look" = "Guard Mode 需要你看一下";
+"BRB needs a look" = "BRB 需要你看一下";
 "Test: %@" = "测试：%@";
 "Watch live" = "看实时画面";
-"Guard Mode test" = "Guard Mode 测试";
+"BRB test" = "BRB 测试";
 "If you see this, alarms will reach this phone." = "收到这条，报警时就会推送到这台手机。";
 
 /* History.swift */
@@ -165,7 +165,7 @@
 "Disarmed by unlocking" = "解锁后解除";
 "Disarmed with Touch ID or password" = "用指纹或密码解除";
 "Cancelled" = "已取消";
-"Guard Mode was stopped" = "警戒模式被停止";
+"Guarding was stopped" = "警戒被停止";
 "Stopped: the sensors sent no data" = "已停止：传感器没有数据";
 "Restarted to watch the keyboard" = "为了监听键盘而重启";
 
@@ -175,7 +175,7 @@
 "On the go" = "路上";
 
 /* First-run introduction */
-"Welcome to Guard Mode" = "欢迎使用 Guard Mode";
+"Welcome to BRB" = "欢迎使用 BRB";
 "%ld of %ld" = "%ld / %ld";
 "Start it before you step away" = "离开前打开它";
 "Every screen frosts over and asks people not to touch. Lifting, tilting or closing the Mac, a key or a click sounds the alarm." = "每块屏幕都会变成磨砂玻璃，提醒别人不要碰。拿起、倾斜、合上电脑，或者按键、点击，都会报警。";
@@ -187,5 +187,5 @@
 "Back" = "上一步";
 "Next" = "下一步";
 "Try a silent run" = "静音试一次";
-"Guard Mode asks for Accessibility and the camera on the way." = "过程中会请你允许辅助功能和摄像头。";
+"BRB asks for Accessibility and the camera on the way." = "过程中会请你允许辅助功能和摄像头。";
 "How it works" = "使用说明";

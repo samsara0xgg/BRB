@@ -35,10 +35,19 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   enum Phase: String { case idle, arming, armed, triggered }
   static let countdownSeconds = 5.0
   static let softSeconds = 10.0
-  static let supportDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/GuardMode")
+  static let supportDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/BRB")
   static let stateFile = supportDir.appendingPathComponent("phase")
   /// pmset calls in order, off the main thread (audit L5).
-  static let pmsetQueue = DispatchQueue(label: "guard-mode.pmset")
+  static let pmsetQueue = DispatchQueue(label: "brb.pmset")
+
+  /// The app was called Guard Mode until October 2026: its state and recordings move over once.
+  static func moveOldFolders() {
+    let fm = FileManager.default, home = fm.homeDirectoryForCurrentUser
+    for (old, new) in [("Library/Application Support/GuardMode", supportDir), ("Movies/GuardMode", Recorder.folder)] {
+      let from = home.appendingPathComponent(old)
+      if fm.fileExists(atPath: from.path), !fm.fileExists(atPath: new.path) { try? fm.moveItem(at: from, to: new) }
+    }
+  }
 
   private var phase = Phase.idle { didSet { persist(); render() } }
   private lazy var item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -72,6 +81,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private var latestPhoto: Data?
 
   func applicationDidFinishLaunching(_ note: Notification) {
+    GuardApp.moveOldFolders()
     Alarm.migrate()
     let dnc = DistributedNotificationCenter.default()
     dnc.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
@@ -100,7 +110,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     sigterm = source
     item.button?.target = self
     item.button?.action = #selector(statusClicked)
-    item.button?.setAccessibilityLabel("Guard Mode")
+    item.button?.setAccessibilityLabel("BRB")
     panel.model.onArm = { [weak self] in self?.arm() }
     veil.onRebuild = { [weak self] in self?.listenForFinger() }
     watchPower()
@@ -416,7 +426,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private func authenticate(_ at: Date) {
     guard phase == .triggered, triggeredAt == at, !screenLocked else { return }
     NSApp.activate(ignoringOtherApps: true)
-    LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: L("Disarm Guard Mode")) { ok, error in
+    LAContext().evaluatePolicy(.deviceOwnerAuthentication, localizedReason: L("Stop guarding")) { ok, error in
       DispatchQueue.main.async {  // GuardApp lives as long as the process
         guard self.phase == .triggered, self.triggeredAt == at else { return }
         if ok { self.disarm(.password); return }
@@ -588,7 +598,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     case .triggered: .alarm
     }
     let tip = switch phase {
-    case .idle: L("Guard Mode is off")
+    case .idle: L("Not guarding")
     case .arming: L("Starting…")
     case .armed: L("Guarding")
     case .triggered: L("Alarm raised")

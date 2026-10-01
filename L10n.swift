@@ -81,7 +81,7 @@ extension Disarm {
     case .unlock: L("Disarmed by unlocking")
     case .password: L("Disarmed with Touch ID or password")
     case .escape: L("Cancelled")
-    case .stopped: L("Guard Mode was stopped")
+    case .stopped: L("Guarding was stopped")
     case .sensorsSilent: L("Stopped: the sensors sent no data")
     case .tapFailed: L("Restarted to watch the keyboard")
     }

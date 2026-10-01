@@ -76,7 +76,7 @@ enum Preflight {
           Check(id: .camera, title: L("Camera"),
                 detail: !camera ? L("No built-in camera: an alarm won't be recorded")
                   : status == .authorized ? L("Films only around an alarm")
-                  : status == .notDetermined ? L("Allow it so an alarm can be recorded") : L("Turned off for GuardMode in System Settings"),
+                  : status == .notDetermined ? L("Allow it so an alarm can be recorded") : L("Turned off for BRB in System Settings"),
                 ok: camera && status == .authorized, optional: !camera, askable: camera && status == .notDetermined),
           Check(id: .sleep, title: L("Stay awake with the lid shut"),
                 detail: sleep ? L("Keeps guarding with the lid closed") : L("Needs an admin rule, installed once from Terminal"), ok: sleep),
@@ -323,7 +323,7 @@ private struct MainPage: View {
         HStack {
           Button(L("How it works")) { model.page = .intro }
           Spacer()
-          Button(L("Quit Guard Mode")) { NSApp.terminate(nil) }
+          Button(L("Quit BRB")) { NSApp.terminate(nil) }
         }
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)
@@ -345,7 +345,7 @@ private struct MainPage: View {
       }
       .frame(width: 36, height: 36)
       VStack(alignment: .leading, spacing: 1) {
-        Text("Guard Mode").font(.system(size: 14.5, weight: .semibold))
+        Text("BRB").font(.system(size: 14.5, weight: .semibold))
         Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
       }
       Spacer(minLength: 6)
@@ -535,7 +535,7 @@ private struct IntroPage: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       HStack {
-        Text(L("Welcome to Guard Mode")).font(.system(size: 14.5, weight: .semibold))
+        Text(L("Welcome to BRB")).font(.system(size: 14.5, weight: .semibold))
         Spacer()
         Text(L("%ld of %ld", step + 1, cards.count)).font(.system(size: 11.5)).monospacedDigit().foregroundStyle(.secondary)
       }
@@ -588,7 +588,7 @@ private struct IntroPage: View {
       }
       .padding(.horizontal, 4)
       if step == cards.count - 1 {
-        Text(L("Guard Mode asks for Accessibility and the camera on the way."))
+        Text(L("BRB asks for Accessibility and the camera on the way."))
           .font(.system(size: 11))
           .foregroundStyle(.tertiary)
           .padding(.horizontal, 4)
@@ -603,7 +603,7 @@ private struct NotReadyPage: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       Back(title: L("Before guarding")) { model.page = .main }
-      Text(L("Guard Mode starts once everything marked below is fixed."))
+      Text(L("Guarding starts once everything marked below is fixed."))
         .font(.system(size: 12))
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
