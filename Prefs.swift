@@ -27,7 +27,7 @@ enum Place: String, CaseIterable, Codable {
     switch self {
     case .library: L("Quiet table: a firm nudge or a lift sounds the alarm")
     case .cafe: L("Busy table: bumps are ignored, carrying it is not")
-    case .transit: L("Moving vehicle: only tilt, the lid, the charger and touch count")
+    case .transit: L("Train or bus: shaking is ignored, tilting it is not")
     }
   }
 

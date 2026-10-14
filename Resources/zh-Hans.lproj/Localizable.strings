@@ -66,7 +66,7 @@
 "Shows the notice on every screen while guarding" = "警戒时每块屏幕都显示提示";
 "Quiet table: a firm nudge or a lift sounds the alarm" = "安静的桌子：推一下或拿起来就报警";
 "Busy table: bumps are ignored, carrying it is not" = "热闹的桌子：轻碰不算，拿走才算";
-"Moving vehicle: only tilt, the lid, the charger and touch count" = "车上：只看倾斜、屏幕、电源和触碰";
+"Train or bus: shaking is ignored, tilting it is not" = "车上：晃动不算，倾斜才算";
 "Recent" = "最近";
 "Rest a finger on Touch ID, or unlock the Mac, to stop" = "手指放在触控 ID 上，或解锁电脑，即可停止";
 "Before guarding" = "开始警戒之前";

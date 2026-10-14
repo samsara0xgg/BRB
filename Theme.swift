@@ -28,9 +28,13 @@ enum Theme {
   static let fill = Color.primary.opacity(0.06)
   static let fill2 = Color.primary.opacity(0.1)
   static let separator = Color.primary.opacity(0.1)
-  /// The knob of the place picker.
-  static let knob = Color(nsColor: NS.dynamic(dark: NSColor(white: 1, alpha: 0.22), light: .white))
-  static let knobText = Color(nsColor: NS.dynamic(dark: .white, light: NS.rgb(0x121826)))
+  /// A text field while typing: a touch lighter in the dark, nearly white in the light.
+  static let input = Color(nsColor: NS.dynamic(dark: NSColor(white: 1, alpha: 0.06), light: NSColor(white: 1, alpha: 0.8)))
+  /// The chosen place's tile, and the warm light behind a ready start button.
+  static let placeOn = Color(nsColor: NS.dynamic(dark: NS.rgb(0xF6B544, 0.13), light: NS.rgb(0xF6B544, 0.16)))
+  static let glow = Color(nsColor: NS.dynamic(dark: NS.rgb(0xF6B544, 0.2), light: NS.rgb(0xF6B544, 0.16)))
+  /// The start button's shadow, and anything else lit amber that floats.
+  static let amberShadow = Color(red: 220 / 255, green: 140 / 255, blue: 20 / 255)
 
   // The panel's four sizes.
   static let title = Font.system(size: 15, weight: .semibold)

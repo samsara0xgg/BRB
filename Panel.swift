@@ -6,8 +6,8 @@ import LocalAuthentication
 import SwiftUI
 
 /// The menu-bar panel holds only what matters before stepping away (audit A1): the start button,
-/// where the Mac is, a note for the screen, what is on, and the last few sessions. Anything missing
-/// is listed on top and fixed in place (A2); everything else lives in Settings.
+/// where the Mac is, a note for the screen and the last few sessions, with what is on in the ⋯
+/// menu. Anything missing is listed on top and fixed in place (A2); everything else lives in Settings.
 final class Panel: NSObject, NSPopoverDelegate {
   let model: PanelModel
   /// The menu-bar button the panel hangs from.
@@ -572,7 +572,7 @@ final class PanelModel: ObservableObject {
     let ask = resetAsk
     DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
       guard let self, confirmReset, resetAsk == ask else { return }
-      withAnimation(Theme.out(0.3)) { confirmReset = false }
+      withAnimation(Theme.out(0.3)) { self.confirmReset = false }
     }
   }
 
@@ -632,6 +632,24 @@ struct PanelView: View {
     }
     .padding(14)
     .frame(width: 340)
+    .background(alignment: .top) { Glow(lit: model.page == .main && model.phase == .idle && model.ready && model.fixRows.isEmpty) }
+  }
+}
+
+/// A warm light behind the start button while it is ready. It comes on as the setup card folds
+/// away, with the light crossing the button, and goes while something is missing.
+private struct Glow: View {
+  let lit: Bool
+
+  var body: some View {
+    // Centered on the start button; the ellipse is the frame's shape, wider than tall.
+    EllipticalGradient(colors: [Theme.glow, Theme.glow.opacity(0)], center: UnitPoint(x: 0.5, y: 86 / 210),
+                       startRadiusFraction: 0, endRadiusFraction: 0.5)
+      .frame(width: 340, height: 210)
+      .opacity(lit ? 1 : 0)
+      .animation(.easeInOut(duration: 0.6), value: lit)
+      .allowsHitTesting(false)
+      .accessibilityHidden(true)
   }
 }
 
@@ -650,8 +668,12 @@ private struct MainPage: View {
             .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
         }
         Hero(model: model)
-        TripCard(model: model)
+        PlacePicker(selection: $model.place)
           .padding(.top, 12)
+        PlaceHint(place: model.place)
+          .padding(EdgeInsets(top: 8, leading: 4, bottom: 0, trailing: 4))
+        NoteField(model: model)
+          .padding(.top, 10)
         Recent(model: model)
       case .arming:
         MiniCountdown(model: model)
@@ -1000,7 +1022,7 @@ private struct Hero: View {
     .keyboardShortcut(.defaultAction)
     .focusEffectDisabled()
     .focused($focused)
-    .shadow(color: Color(red: 220 / 255, green: 140 / 255, blue: 20 / 255).opacity(locked ? 0 : lift ? 0.38 : 0.3), radius: lift ? 12 : 8, y: lift ? 9 : 6)
+    .shadow(color: Theme.amberShadow.opacity(locked ? 0 : lift ? 0.38 : 0.3), radius: lift ? 12 : 8, y: lift ? 9 : 6)
     .overlay(RoundedRectangle(cornerRadius: 19, style: .continuous).strokeBorder(Theme.amber.opacity(0.8), lineWidth: 2.5).padding(-4).opacity(focused ? 1 : 0))
     .modifier(Shake(model.lockedNudge))
     .animation(.timingCurve(0.36, 0.07, 0.19, 0.97, duration: 0.42), value: model.lockedNudge)
@@ -1122,72 +1144,78 @@ struct Pressable: ButtonStyle {
   }
 }
 
-/// Library, café, on the go: three equal parts and one knob that slides (audit B1).
+/// Library, café, on the go: three tiles, the chosen one lit amber like the start button it sets up
+/// (audit B1). ← → move it too.
 private struct PlacePicker: View {
   @Binding var selection: Place
-  @Namespace private var knob
 
   var body: some View {
-    HStack(spacing: 0) {
+    HStack(spacing: 6) {
       ForEach(Place.allCases, id: \.self) { place in
-        let on = place == selection
-        Button {
-          selection = place
-        } label: {
-          HStack(spacing: 6) {
-            Image(systemName: place.symbol)
-              .font(.system(size: 12.5))
-              .scaleEffect(on ? 1.06 : 1)
-            Text(place.title)
-              .font(.system(size: 12.5, weight: .medium))
-              .lineLimit(1)
-              .minimumScaleFactor(0.85)
-          }
-          .foregroundStyle(on ? Theme.knobText : Color.secondary)
-          .padding(.horizontal, 4)
-          .frame(maxWidth: .infinity)
-          .frame(height: 30)
-          .background {
-            if on {
-              RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(Theme.knob)
-                .shadow(color: .black.opacity(0.2), radius: 1.25, y: 1)
-                .matchedGeometryEffect(id: "knob", in: knob)
-            }
-          }
-          .contentShape(Rectangle())
-        }
-        .buttonStyle(Pressable(scale: 0.96))
-        .accessibilityAddTraits(on ? .isSelected : [])
+        PlaceTile(place: place, on: place == selection) { selection = place }
       }
     }
-    .animation(Theme.slide, value: selection)
   }
 }
 
-/// Where it is and the note: one card instead of three boxes.
-private struct TripCard: View {
-  @ObservedObject var model: PanelModel
+private struct PlaceTile: View {
+  let place: Place
+  let on: Bool
+  let pick: () -> Void
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var hover = false
+  @State private var pop: CGFloat = 1
+  @State private var bounces = 0
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      PlacePicker(selection: $model.place)
-      PlaceHint(place: model.place)
-        .padding(EdgeInsets(top: 7, leading: 8, bottom: 9, trailing: 8))
-      Rectangle()
-        .fill(Theme.separator)
-        .frame(height: 0.5)
-        .padding(.horizontal, 8)
-        .padding(.bottom, 3)
-      NoteField(model: model)
+    Button(action: pick) {
+      VStack(spacing: 6) {
+        orb
+        Text(place.title)
+          .font(.system(size: 12, weight: .medium))
+          .foregroundStyle(on || hover ? Color.primary : Color.secondary)
+          .lineLimit(1)
+          .minimumScaleFactor(0.85)
+      }
+      .padding(EdgeInsets(top: 10, leading: 4, bottom: 9, trailing: 4))
+      .frame(maxWidth: .infinity)
+      .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? Theme.placeOn : hover ? Theme.fill2 : Theme.fill))
+      .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(on ? Theme.amber.opacity(0.55) : Theme.separator, lineWidth: 0.5))
+      .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
-    .padding(4)
-    .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Theme.fill))
-    .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(Theme.separator, lineWidth: 0.5))
+    .buttonStyle(Pressable(scale: 0.96))
+    .onHover { hover = $0 }
+    .animation(.easeOut(duration: 0.25), value: on)
+    .animation(.easeOut(duration: 0.25), value: hover)
+    .onChange(of: on) { _, now in
+      guard now, !reduceMotion else { return }
+      bounces += 1
+      replay(.spring(duration: 0.5, bounce: 0.35)) { pop = $0 ? 1 : 0.78 }
+    }
+    .accessibilityAddTraits(on ? .isSelected : [])
+  }
+
+  /// A quiet well, or the start button's amber with its highlight and shadow; the glyph dips as it
+  /// lights.
+  private var orb: some View {
+    ZStack {
+      Circle().fill(Theme.fill2)
+      Circle()
+        .fill(LinearGradient(colors: [Theme.amberHi, Theme.amberDeep], startPoint: .top, endPoint: .bottom))
+        .overlay(Circle().strokeBorder(LinearGradient(colors: [.white.opacity(0.6), .white.opacity(0)], startPoint: .top, endPoint: .center), lineWidth: 0.5))
+        .shadow(color: Theme.amberShadow.opacity(0.35), radius: 4, y: 2)
+        .opacity(on ? 1 : 0)
+      Image(systemName: place.symbol)
+        .font(.system(size: 14, weight: .medium))
+        .foregroundStyle(on ? Theme.ink : Color.secondary)
+        .symbolEffect(.bounce.down, value: bounces)
+    }
+    .frame(width: 32, height: 32)
+    .scaleEffect(pop)
   }
 }
 
-/// What counts at this place. All three lines are laid out, so the card keeps its height.
+/// What counts at this place. All three lines are laid out, so the panel keeps its height.
 private struct PlaceHint: View {
   let place: Place
 
@@ -1249,10 +1277,10 @@ private struct NoteField: View {
       .help(L("Clear"))
       .accessibilityLabel(L("Clear"))
     }
-    .padding(.leading, 8)
-    .padding(.trailing, 6)
+    .padding(.leading, 10)
+    .padding(.trailing, 8)
     .frame(height: 34)
-    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(focused ? Color.primary.opacity(0.05) : Color.clear))
+    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(focused ? Theme.input : Theme.fill))
     .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Theme.amberDeep.opacity(0.9), lineWidth: 1).opacity(focused ? 1 : 0))
     .overlay(RoundedRectangle(cornerRadius: 12.5, style: .continuous).strokeBorder(Theme.amber.opacity(0.32), lineWidth: 3.5).padding(-3.5).opacity(focused ? 1 : 0))
     .animation(.easeOut(duration: 0.18), value: focused)
@@ -1339,23 +1367,22 @@ private struct RecentRow: View {
     .animation(.easeOut(duration: 0.15), value: hover)
   }
 
-  /// Only an alarm is in color; the quiet sessions are a light ring, so the eye goes to the red one.
+  /// Green for a quiet session, red for an alarm, the silent run's stripes for a test: the same
+  /// colors as the phone's list.
   private var tile: some View {
-    let alarmed = session.alarmed
-    return Image(systemName: alarmed ? "exclamationmark" : session.quiet ? "checkmark" : "minus")
-      .font(.system(size: 10.5, weight: .bold))
-      .foregroundStyle(alarmed ? Color.white : Color.secondary)
-      .frame(width: 22, height: 22)
+    let s = session
+    let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
+    return Image(systemName: s.alarmed ? "exclamationmark" : s.quiet ? "checkmark" : "minus")
+      .font(.system(size: 11, weight: .bold))
+      .foregroundStyle(s.test ? Theme.ink : s.alarmed ? Theme.red : s.quiet ? Theme.green : Color.secondary)
+      .frame(width: 26, height: 26)
       .background {
-        if alarmed {
-          Circle()
-            .fill(Theme.red)
-            .shadow(color: Theme.redDeep.opacity(0.35), radius: 1.5, y: 1)
+        if s.test {
+          Stripes(band: 4).background(Theme.amberDeep).clipShape(shape)
         } else {
-          Circle().strokeBorder(Theme.separator, lineWidth: 1)
+          shape.fill(s.alarmed ? Theme.red.opacity(0.16) : s.quiet ? Theme.green.opacity(0.15) : Theme.fill)
         }
       }
-      .padding(.horizontal, 2)
   }
 }
 
