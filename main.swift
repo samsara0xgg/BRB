@@ -359,6 +359,10 @@ func snapshotCommand(_ what: String, out: String?) {
   }
   let app = NSApplication.shared
   app.setActivationPolicy(.accessory)
+  // `-AppleInterfaceStyle Dark` on the command line: the dark look, whatever this Mac is set to.
+  if UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)["AppleInterfaceStyle"] as? String == "Dark" {
+    app.appearance = NSAppearance(named: .darkAqua)
+  }
   let zh = Bundle.main.preferredLocalizations.first?.hasPrefix("zh") == true
   let note = zh ? "3 点回来" : "Back at 3"
   let now = Date()
@@ -456,7 +460,8 @@ func snapshotCommand(_ what: String, out: String?) {
 private func render(_ what: String, to out: String?, _ view: @escaping () -> AnyView) {
   guard let out else { return }
   DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
-    let renderer = ImageRenderer(content: view())
+    let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    let renderer = ImageRenderer(content: view().environment(\.colorScheme, dark ? .dark : .light))
     renderer.scale = 2
     guard let cg = renderer.cgImage, let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else {
       print("render failed")

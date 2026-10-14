@@ -30,11 +30,12 @@ struct Session: Codable {
     return L("Nobody touched it")
   }
 
-  /// The second line: when, and how it ended or how long it lasted.
+  /// The second line: when, and how it ended or how long it lasted. A test says only that it was
+  /// one, so the line fits beside its striped tile.
   var detail: String {
-    let how = trigger != nil ? disarm.phrase : Clock.away(ended.timeIntervalSince(armed))
-    let line = Clock.when(triggeredAt ?? armed) + " · " + how
-    return test ? line + " · " + L("Test · silent") : line
+    let when = Clock.when(triggeredAt ?? armed)
+    if test { return when + " · " + L("Test · silent") }
+    return when + " · " + (trigger != nil ? disarm.phrase : Clock.away(ended.timeIntervalSince(armed)))
   }
 
   /// Ended in an alarm (a test run's included).

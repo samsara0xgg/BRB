@@ -50,6 +50,7 @@ final class SettingsWindow: NSObject, NSToolbarDelegate, NSWindowDelegate {
     if !w.isVisible {
       animates = false
       resize(w, to: SettingsPane.height(model: model, tab: tab), animate: false)
+      w.center()
     }
     NSApp.activate(ignoringOtherApps: true)
     w.makeKeyAndOrderFront(nil)
@@ -74,7 +75,7 @@ final class SettingsWindow: NSObject, NSToolbarDelegate, NSWindowDelegate {
     toolbar.allowsUserCustomization = false
     w.toolbar = toolbar
     w.toolbarStyle = .preference
-    let host = NSHostingView(rootView: SettingsRoot(model: model) { [weak self] in self?.fit($0) })
+    let host = NSHostingView(rootView: SettingsRoot(model: model) { [weak self] tab, height in self?.fit(tab, height) })
     host.sizingOptions = []  // the window follows the pane by hand, so it can animate
     w.contentView = host
     w.center()
@@ -93,21 +94,27 @@ final class SettingsWindow: NSObject, NSToolbarDelegate, NSWindowDelegate {
     }
   }
 
-  /// A pane's height changed: a tab picked, alerts switched on, the reset line opened.
-  private func fit(_ height: CGFloat) {
+  /// A pane's height changed: a tab picked, alerts switched on, the reset line opened. Only the
+  /// shown tab's pane counts: one on its way out, or the one first laid out, reports too.
+  private func fit(_ tab: SettingsTab, _ height: CGFloat) {
     DispatchQueue.main.async { [weak self] in
-      guard let self, let w = window else { return }
+      guard let self, let w = window, tab == model.settingsTab else { return }
       resize(w, to: height, animate: animates && w.isVisible)
     }
   }
 
+  /// Makes the pane area `height` tall, the top edge staying put. Measured against the content view
+  /// itself, so the toolbar's height never needs knowing; kept clear of the Dock and the menu bar.
   private func resize(_ w: NSWindow, to height: CGFloat, animate: Bool) {
-    let chrome = w.frame.height - w.contentLayoutRect.height
-    let target = ceil(max(height, 120)) + chrome
-    guard abs(target - w.frame.height) > 0.5 else { return }
+    guard let content = w.contentView else { return }
+    let delta = ceil(max(height, 120)) - content.frame.height
+    guard abs(delta) > 0.5 else { return }
     var f = w.frame
-    f.origin.y += f.height - target
-    f.size.height = target
+    f.origin.y -= delta
+    f.size.height += delta
+    if let visible = (w.screen ?? NSScreen.main)?.visibleFrame {
+      f.origin.y = min(max(f.origin.y, visible.minY), visible.maxY - f.height)
+    }
     w.setFrame(f, display: true, animate: animate)
   }
 
@@ -154,21 +161,23 @@ final class SettingsWindow: NSObject, NSToolbarDelegate, NSWindowDelegate {
 /// The selected pane, cross-fading into the next, with its height handed to the window.
 struct SettingsRoot: View {
   @ObservedObject var model: PanelModel
-  var fit: (CGFloat) -> Void = { _ in }
+  /// A pane's height, with the tab it belongs to.
+  var fit: (SettingsTab, CGFloat) -> Void = { _, _ in }
 
   var body: some View {
+    let tab = model.settingsTab
     ZStack(alignment: .top) {
-      SettingsPane(model: model, tab: model.settingsTab)
+      SettingsPane(model: model, tab: tab)
         .background(GeometryReader { g in
           Color.clear
-            .onAppear { fit(g.size.height) }
-            .onChange(of: g.size.height) { _, h in fit(h) }
+            .onAppear { fit(tab, g.size.height) }
+            .onChange(of: g.size.height) { _, h in fit(tab, h) }
         })
-        .id(model.settingsTab)
+        .id(tab)
         .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 6)), removal: .opacity))
     }
     .frame(width: SettingsWindow.width)
-    .frame(maxHeight: .infinity, alignment: .top)
+    .frame(minHeight: 0, maxHeight: .infinity, alignment: .top)  // while the window grows, the pane hangs from the top
   }
 }
 

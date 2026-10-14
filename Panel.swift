@@ -36,7 +36,7 @@ final class Panel: NSObject, NSPopoverDelegate {
 
   /// `intro`: the three cards, from Settings' "Show again".
   func show(intro: Bool = false) {
-    guard let button = anchor() else { return }
+    guard anchor() != nil else { return }
     if intro || !Prefs.introSeen {
       model.introStep = 0
       model.introForward = true
@@ -46,6 +46,17 @@ final class Panel: NSObject, NSPopoverDelegate {
     }
     model.opened()
     NSApp.activate(ignoringOtherApps: true)  // an accessory app's text field needs this for typing
+    present()
+  }
+
+  /// Hangs the panel from the shield. Right after launch the menu bar may not have placed the
+  /// shield yet, and the panel would hang from the corner of the screen: it waits, 2 s at most.
+  private func present(tries: Int = 0) {
+    guard let button = anchor() else { return }
+    if tries < 8, let bar = button.window, let screen = bar.screen ?? NSScreen.main, bar.frame.maxY < screen.frame.midY {
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in self?.present(tries: tries + 1) }
+      return
+    }
     if !popover.isShown { popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY) }
     guard let window = popover.contentViewController?.view.window else { return }
     window.makeKey()
@@ -1330,34 +1341,31 @@ private struct RecentRow: View {
     }
   }
 
+  /// "New" sits on the first line, so the second has the row's whole width.
   private var row: some View {
     HStack(spacing: 8) {
       tile
       VStack(alignment: .leading, spacing: 1) {
-        Text(session.title)
-          .font(Theme.body)
-          .foregroundStyle(session.alarmed ? Theme.warn : Color.primary)
-          .lineLimit(1)
+        HStack(spacing: 6) {
+          Text(session.title)
+            .font(Theme.body)
+            .foregroundStyle(session.alarmed && !session.test ? Theme.warn : Color.primary)
+            .lineLimit(1)
+          Spacer(minLength: 0)
+          if isNew {
+            Text(L("New"))
+              .font(.system(size: 10, weight: .semibold))
+              .foregroundStyle(.white)
+              .padding(.horizontal, 6)
+              .frame(height: 16)
+              .background(Capsule().fill(Theme.red))
+          }
+        }
         Text(session.detail)
           .font(Theme.label)
           .monospacedDigit()
           .foregroundStyle(.tertiary)
           .lineLimit(1)
-      }
-      Spacer(minLength: 6)
-      if isNew {
-        Text(L("New"))
-          .font(.system(size: 10, weight: .semibold))
-          .foregroundStyle(.white)
-          .padding(.horizontal, 6)
-          .padding(.vertical, 3)
-          .background(Capsule().fill(Theme.red))
-      }
-      if session.clip != nil {
-        Image(systemName: "arrow.up.forward")
-          .font(.system(size: 11, weight: .semibold))
-          .foregroundStyle(.tertiary)
-          .opacity(hover ? 1 : 0)
       }
     }
     .padding(.horizontal, 4)
@@ -1368,12 +1376,15 @@ private struct RecentRow: View {
   }
 
   /// Green for a quiet session, red for an alarm, the silent run's stripes for a test: the same
-  /// colors as the phone's list.
+  /// colors as the phone's list. Pointing at a row with a recording turns the mark into the arrow
+  /// that shows it in Finder.
   private var tile: some View {
     let s = session
     let shape = RoundedRectangle(cornerRadius: 8, style: .continuous)
-    return Image(systemName: s.alarmed ? "exclamationmark" : s.quiet ? "checkmark" : "minus")
+    let mark = s.alarmed ? "exclamationmark" : s.quiet ? "checkmark" : "minus"
+    return Image(systemName: hover ? "arrow.up.forward" : mark)
       .font(.system(size: 11, weight: .bold))
+      .contentTransition(.symbolEffect(.replace))
       .foregroundStyle(s.test ? Theme.ink : s.alarmed ? Theme.red : s.quiet ? Theme.green : Color.secondary)
       .frame(width: 26, height: 26)
       .background {
