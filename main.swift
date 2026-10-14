@@ -197,7 +197,7 @@ func selftest(hardware: Bool) {
   missing.checks = Preflight.checks(Preflight.Facts(sleep: false))
   missing.pushOn = true
   check(missing.locked && missing.toFix == 1, "lid rule missing: start button locked, 1 to fix")
-  check(missing.statusRows.map { $0.on } == [true, true, false, true], "the ⋯ menu's status: camera, phone alerts, lid shut, Touch ID")
+  check(missing.statusRows.map { $0.on } == [true, true, false, true], "the Ready chip's status: camera, phone alerts, lid shut, Touch ID")
   check(Ease.fog(0) == 0 && Ease.fog(1) == 1 && Ease.fog(0.5) > 0.5 && Ease.melt(0.25) < Ease.melt(0.75), "timing curves")
 
   let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brb-selftest-\(getpid())")
@@ -350,7 +350,7 @@ func sirenCommand(seconds: Double) {
 func snapshotCommand(_ what: String, out: String?) {
   let veilStages = ["countdown", "armed", "test", "alarm", "welcome", "other"]
   let panelStages = ["panel", "silent", "notready", "mini", "intro", "intro2", "intro3"]
-  let tabs: [String: SettingsTab] = ["settings": .general, "settings-phone": .phone, "settings-recordings": .recordings, "settings-checks": .checks]
+  let tabs: [String: SettingsTab] = ["settings": .general, "settings-preview": .general, "settings-phone": .phone, "settings-recordings": .recordings, "settings-checks": .checks]
   if what == "icons", let out { exit(renderIcons(to: out) ? 0 : 1) }
   guard veilStages.contains(what) || panelStages.contains(what) || tabs[what] != nil else {
     let all = veilStages + panelStages + tabs.keys.sorted() + ["icons"]
@@ -419,6 +419,7 @@ func snapshotCommand(_ what: String, out: String?) {
     p.clips = [Clip(url: Recorder.folder.appendingPathComponent("alarm.mov"), date: now, session: alarmed, bytes: 18_400_000),
                Clip(url: Recorder.folder.appendingPathComponent("trial.mov"), date: trial.ended, session: trial, bytes: 6_200_000)]
     p.optionHeld = what == "silent"
+    p.confirmPreview = what == "settings-preview"
     if what == "mini" {  // the countdown in the panel, when the frosted screen is off
       p.phase = .arming
       p.countdownFrom = now.addingTimeInterval(-2.4)

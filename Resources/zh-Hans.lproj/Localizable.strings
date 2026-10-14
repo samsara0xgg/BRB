@@ -113,7 +113,9 @@
 "General" = "通用";
 "Phone" = "手机";
 "Checks" = "检查";
-"Preview" = "试听";
+"Preview…" = "试听…";
+"Sounds the siren at %d%% for under a second, even with headphones on." = "会用 %d%% 的音量响一下，不到 1 秒，戴着耳机也会外放。";
+"Play" = "播放";
 "Three cards on what BRB does" = "用三张卡片介绍 BRB";
 "Show again" = "再看一遍";
 "Alerts" = "提醒";

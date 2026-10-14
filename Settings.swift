@@ -215,33 +215,11 @@ private struct GeneralPane: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 20) {
       SettingsGroup {
-        SettingsRow(title: L("Siren volume"), sub: L("The siren plays on the built-in speakers")) {
-          HStack(spacing: 6) {
-            Image(systemName: "speaker.wave.1.fill")
-              .font(.system(size: 11))
-              .foregroundStyle(.tertiary)
-            Slider(value: Binding(get: { model.volume }, set: { model.volume = ($0 / 5).rounded() * 5 }), in: 10...100)
-              .controlSize(.small)
-              .tint(Theme.amberDeep)
-              .frame(width: 150)
-            Image(systemName: "speaker.wave.3.fill")
-              .font(.system(size: 11))
-              .foregroundStyle(.tertiary)
-            Text(verbatim: "\(Int(model.volume))%")
-              .font(Theme.caption)
-              .monospacedDigit()
-              .foregroundStyle(.secondary)
-              .frame(width: 36, alignment: .trailing)
-            Button(action: model.preview) {
-              HStack(spacing: 5) {
-                Meter(model: model)
-                Text(L("Preview"))
-              }
-            }
-            .controlSize(.small)
-            .disabled(model.phase != .idle)
-            .padding(.leading, 4)
-          }
+        VolumeRow(model: model)
+        if model.confirmPreview {
+          RowDivider()
+          PreviewConfirm(model: model)
+            .transition(.opacity.combined(with: .offset(y: -4)))
         }
         RowDivider()
         SwitchRow(title: L("Test mode"), sub: L("Next run stays silent, then turns itself off"), on: $model.testMode, striped: true)
@@ -262,6 +240,83 @@ private struct GeneralPane: View {
   }
 
   private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0" }
+}
+
+/// The siren's volume on a slider of its own, the full width of the row, under its title and
+/// "Preview…". The ellipsis says the button asks first: see `PreviewConfirm`.
+private struct VolumeRow: View {
+  @ObservedObject var model: PanelModel
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 2) {
+          Text(L("Siren volume"))
+            .font(Theme.body)
+          Text(L("The siren plays on the built-in speakers"))
+            .font(Theme.label)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        Spacer(minLength: 12)
+        Button(action: model.askPreview) {
+          HStack(spacing: 5) {
+            Meter(model: model)
+            Text(L("Preview…"))
+          }
+          .fixedSize()
+        }
+        .controlSize(.small)
+        .disabled(model.phase != .idle || model.confirmPreview)
+      }
+      HStack(spacing: 8) {
+        Image(systemName: "speaker.wave.1.fill")
+          .font(.system(size: 11))
+          .foregroundStyle(.tertiary)
+        Slider(value: Binding(get: { model.volume }, set: { model.volume = ($0 / 5).rounded() * 5 }), in: 10...100)
+          .controlSize(.small)
+          .tint(Theme.amberDeep)
+        Image(systemName: "speaker.wave.3.fill")
+          .font(.system(size: 11))
+          .foregroundStyle(.tertiary)
+        Text(verbatim: "\(Int(model.volume))%")
+          .font(Theme.caption)
+          .monospacedDigit()
+          .foregroundStyle(.secondary)
+          .frame(width: 36, alignment: .trailing)
+      }
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 10)
+  }
+}
+
+/// What "Preview…" is about to do, before it does it: the siren at the set volume, on the
+/// built-in speakers even with headphones on. Play, or Cancel (esc); it folds away by itself.
+private struct PreviewConfirm: View {
+  @ObservedObject var model: PanelModel
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Image(systemName: "speaker.wave.3.fill")
+        .font(.system(size: 12))
+        .foregroundStyle(Theme.amberDeep)
+      Text(L("Sounds the siren at %d%% for under a second, even with headphones on.", Int(model.volume)))
+        .font(Theme.caption)
+        .fixedSize(horizontal: false, vertical: true)
+      Spacer(minLength: 8)
+      Button(L("Cancel"), action: model.cancelPreview)
+        .keyboardShortcut(.cancelAction)
+      Button(L("Play"), action: model.preview)
+        .buttonStyle(.borderedProminent)
+        .keyboardShortcut(.defaultAction)
+    }
+    .controlSize(.small)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+    .frame(minHeight: 44)
+    .background(Theme.amber.opacity(0.08))
+  }
 }
 
 /// Seven bars that dance at the set volume while the preview plays (audit B4).
