@@ -57,6 +57,9 @@ final class Panel: NSObject, NSPopoverDelegate {
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in self?.present(tries: tries + 1) }
       return
     }
+    // Light or dark as the system is set, like Control Center: left alone, a popover takes the menu
+    // bar's look, which follows the wallpaper.
+    popover.appearance = NSApp.effectiveAppearance
     if !popover.isShown { popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY) }
     guard let window = popover.contentViewController?.view.window else { return }
     window.makeKey()
