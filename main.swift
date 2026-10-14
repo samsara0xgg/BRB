@@ -176,15 +176,28 @@ func selftest(hardware: Bool) {
                         disarm: .fingerprint, bumps: 1, softSeconds: 0, sirenSeconds: 12, photos: 3, clip: "x.mov", test: false)
   let decoded = (try? JSONEncoder().encode([session])).flatMap { try? JSONDecoder().decode([Session].self, from: $0) }
   check(decoded?.first?.trigger == .lifted && decoded?.first?.photos == 3 && decoded?.first?.disarm == .fingerprint, "history entry round-trips")
-  check(session.welcome.alarmed && session.welcome.chips.count == 2 && !session.line.isEmpty, "welcome after an alarm: title, two chips")
+  check(session.welcome.alarmed && session.welcome.chips.count == 2 && !session.title.isEmpty && !session.detail.isEmpty,
+        "welcome after an alarm: title, two chips; its Recent row: two lines")
   var quiet = session
   quiet.trigger = nil
   quiet.bumps = 0
   check(!quiet.welcome.alarmed && quiet.welcome.chips.count == 2, "welcome after a quiet run: two chips")
 
-  let looks: [StatusIcon.Look] = [.idle, .arming(0.4), .armed, .alarm, .test, .partial]
-  check(looks.allSatisfy { StatusIcon.image($0).cgImage(forProposedRect: nil, context: nil, hints: nil) != nil }, "menu-bar shield draws in all six looks")
-  check(StatusIcon.image(.idle).isTemplate && !StatusIcon.image(.armed).isTemplate, "only the idle shield follows the menu bar's color")
+  let looks: [StatusIcon.Look] = [.idle, .arming(0.4), .armed, .partial, .test, .alarm, .clear, .badge]
+  check(looks.allSatisfy { StatusIcon.image($0).cgImage(forProposedRect: nil, context: nil, hints: nil) != nil }, "menu-bar shield draws in all eight looks")
+  check(StatusIcon.image(.idle).isTemplate && !StatusIcon.image(.armed).isTemplate && !StatusIcon.image(.badge).isTemplate,
+        "only the idle shield follows the menu bar's color")
+  check(StatusIcon.pop(0) == 0.4 && StatusIcon.pop(0.45) > 1.2 && StatusIcon.pop(0.72) < 1 && StatusIcon.pop(1) == 1,
+        "landing pop: in from 40 %, over, under, settles at 100 %")
+
+  let fine = PanelModel(canned: true)
+  fine.checks = Preflight.checks(Preflight.Facts(touchID: false, push: false))
+  check(fine.ready && !fine.locked, "no Touch ID, no phone alerts: still ready (both optional)")
+  let missing = PanelModel(canned: true)
+  missing.checks = Preflight.checks(Preflight.Facts(sleep: false))
+  missing.pushOn = true
+  check(missing.locked && missing.toFix == 1, "lid rule missing: start button locked, 1 to fix")
+  check(missing.statusRows.map { $0.on } == [true, true, false, true], "the ⋯ menu's status: camera, phone alerts, lid shut, Touch ID")
   check(Ease.fog(0) == 0 && Ease.fog(1) == 1 && Ease.fog(0.5) > 0.5 && Ease.melt(0.25) < Ease.melt(0.75), "timing curves")
 
   let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brb-selftest-\(getpid())")
@@ -328,85 +341,122 @@ func sirenCommand(seconds: Double) {
   exit(0)
 }
 
-/// Shows the frosted screen at one stage, or the panel, for 3.5 s without guarding anything (silent):
-/// for screenshots. With `out`, also renders the notice or the panel to that PNG (SwiftUI only, so
-/// without the blur behind it). Run with `-AppleLanguages "(zh-Hans)"` for the Chinese copy.
+/// Shows one screen for 3.5 s without guarding anything (silent), for screenshots: the frosted
+/// screen at a stage, the panel under a menu-bar shield, or a Settings tab, with made-up sessions and
+/// every check passing unless the stage says otherwise. Nothing is read from or written to this
+/// Mac's settings. With `out`, also renders it to that PNG (SwiftUI only: no blur behind it, AppKit
+/// controls as placeholders); `icons` renders the menu-bar shield's looks and nothing else. Run with
+/// `-AppleLanguages "(zh-Hans)"` for the Chinese copy.
 func snapshotCommand(_ what: String, out: String?) {
+  let veilStages = ["countdown", "armed", "test", "alarm", "welcome", "other"]
+  let panelStages = ["panel", "silent", "notready", "mini", "intro", "intro2", "intro3"]
+  let tabs: [String: SettingsTab] = ["settings": .general, "settings-phone": .phone, "settings-recordings": .recordings, "settings-checks": .checks]
+  if what == "icons", let out { exit(renderIcons(to: out) ? 0 : 1) }
+  guard veilStages.contains(what) || panelStages.contains(what) || tabs[what] != nil else {
+    let all = veilStages + panelStages + tabs.keys.sorted() + ["icons"]
+    print("snapshot " + all.joined(separator: " | ") + " [out.png]")
+    exit(2)
+  }
   let app = NSApplication.shared
   app.setActivationPolicy(.accessory)
   let zh = Bundle.main.preferredLocalizations.first?.hasPrefix("zh") == true
-  let veil = Veil()
-  let m = veil.model
-  m.note = zh ? "3 点回来" : "Back at 3"
-  m.armedAt = Date().addingTimeInterval(-42 * 60)
-  m.pushOn = true
-  let armed = Date().addingTimeInterval(-40 * 60)
-  let alarmed = Session(armed: armed, ended: Date(), trigger: .lifted, triggeredAt: armed.addingTimeInterval(1500), disarm: .fingerprint,
-                        bumps: 0, softSeconds: 0, sirenSeconds: 8, photos: 3, clip: "x.mov", test: false)
+  let note = zh ? "3 点回来" : "Back at 3"
+  let now = Date()
+  let armed = now.addingTimeInterval(-40 * 60)
+  let alarmed = Session(armed: armed, ended: now, trigger: .lifted, triggeredAt: armed.addingTimeInterval(1500), disarm: .fingerprint,
+                        bumps: 0, softSeconds: 0, sirenSeconds: 8, photos: 3, clip: "alarm.mov", test: false)
   let quiet = Session(armed: armed.addingTimeInterval(-86400), ended: armed.addingTimeInterval(-86400 + 1500), trigger: nil, triggeredAt: nil,
                       disarm: .fingerprint, bumps: 2, softSeconds: 0, sirenSeconds: 0, photos: 0, clip: nil, test: false)
-  var panel: PanelModel?
-  var window: NSWindow?
-  switch what {
-  case "countdown":
-    veil.countdown(5)
-    for s in 1...3 { DispatchQueue.main.asyncAfter(deadline: .now() + Double(s)) { m.remaining = 5 - s } }
-  case "armed", "test":
-    m.test = what == "test"
-    veil.guarding()
-  case "alarm":
-    veil.guarding()
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { veil.alarm(pointer: nil, origin: Trigger.keyboard.floodOrigin) }
-  case "welcome":
-    veil.guarding()
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { veil.welcome(alarmed.welcome, toward: nil) }
-  case "panel", "notready", "intro", "intro2", "intro3":
-    let p = PanelModel()
-    p.refresh()
-    if what == "notready" { p.page = .notReady }
+  let trial = Session(armed: armed.addingTimeInterval(-2 * 86400), ended: armed.addingTimeInterval(-2 * 86400 + 300), trigger: .keyboard,
+                      triggeredAt: armed.addingTimeInterval(-2 * 86400 + 120), disarm: .fingerprint, bumps: 0, softSeconds: 4,
+                      sirenSeconds: 0, photos: 0, clip: "trial.mov", test: true)
+  var keep: [AnyObject] = []  // alive until the exit
+
+  if veilStages.contains(what) {
+    let veil = Veil()
+    let m = veil.model
+    m.note = note
+    m.armedAt = armed
+    m.pushOn = true
+    switch what {
+    case "countdown":
+      veil.countdown(5)
+      for s in 1...3 { DispatchQueue.main.asyncAfter(deadline: .now() + Double(s)) { m.remaining = 5 - s } }
+    case "alarm":
+      veil.guarding()
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { veil.alarm(pointer: nil, origin: Trigger.keyboard.floodOrigin) }
+    case "welcome":
+      veil.guarding()
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { veil.welcome(alarmed.welcome, toward: nil) }
+    default:  // armed, test, and other: a screen without the notice
+      m.test = what == "test"
+      veil.guarding()
+    }
+    keep.append(veil)
+    render(what, to: out) {
+      let size = NSScreen.screens.first { $0.isBuiltIn }?.frame.size ?? NSScreen.main?.frame.size ?? CGSize(width: 1512, height: 982)
+      return AnyView(VeilView(model: m, showsNotice: what != "other", displayID: 0)
+        .frame(width: size.width, height: size.height)
+        .background(LinearGradient(colors: [Color(red: 0.16, green: 0.2, blue: 0.3), Color(red: 0.05, green: 0.07, blue: 0.12)],
+                                   startPoint: .top, endPoint: .bottom)))
+    }
+  } else {
+    let p = PanelModel(canned: true)
+    p.checks = Preflight.checks(Preflight.Facts(sleep: what != "notready" && what != "settings-checks"))
+    if what == "notready" {  // one row fixed and ticked, one still to do
+      p.fixRows = p.checks.filter { $0.id == .accessibility || $0.id == .sleep }
+      p.setupTotal = 2
+    }
+    p.pushOn = true
+    p.note = note
+    p.volume = 80
+    p.history = [alarmed, quiet, trial]
+    p.newSince = now.addingTimeInterval(-60)
+    p.clips = [Clip(url: Recorder.folder.appendingPathComponent("alarm.mov"), date: now, session: alarmed, bytes: 18_400_000),
+               Clip(url: Recorder.folder.appendingPathComponent("trial.mov"), date: trial.ended, session: trial, bytes: 6_200_000)]
+    p.optionHeld = what == "silent"
+    if what == "mini" {  // the countdown in the panel, when the frosted screen is off
+      p.phase = .arming
+      p.countdownFrom = now.addingTimeInterval(-2.4)
+      p.remaining = 3
+    }
     if what.hasPrefix("intro") {
       p.page = .intro
       p.introStep = what == "intro3" ? 2 : what == "intro2" ? 1 : 0
     }
-    p.recent = [alarmed, quiet]
-    p.clips = 2
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-      if what == "panel" { p.checks = p.checks.map { Check(id: $0.id, title: $0.title, detail: $0.detail, ok: true, optional: $0.optional, quiet: $0.quiet) } }
-      if what == "notready" {  // one thing to fix, whatever this Mac has
-        p.checks = p.checks.map { $0.id == .sleep ? Check(id: .sleep, title: $0.title, detail: L("Needs an admin rule, installed once with your password"), ok: false) : $0 }
-      }
-    }
-    let host = NSHostingController(rootView: PanelView(model: p))
-    host.sizingOptions = .preferredContentSize
-    let w = NSWindow(contentViewController: host)
-    w.styleMask = [.titled, .fullSizeContentView]
-    w.titlebarAppearsTransparent = true
-    w.titleVisibility = .hidden
-    for b in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] { w.standardWindowButton(b)?.isHidden = true }
-    let pin = {  // where the popover hangs, under the menu bar, again once the checks change its height
-      if let area = NSScreen.main?.visibleFrame { w.setFrameTopLeftPoint(NSPoint(x: area.maxX - w.frame.width - 160, y: area.maxY - 6)) }
-    }
-    pin()
-    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: pin)
-    w.makeKeyAndOrderFront(nil)
-    app.activate(ignoringOtherApps: true)
-    panel = p
-    window = w
-  default:
-    print("snapshot countdown | armed | test | alarm | welcome | panel | notready | intro | intro2 | intro3 [out.png]")
-    exit(2)
-  }
-  DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
-    guard let out else { return }
-    let size = NSScreen.screens.first { $0.isBuiltIn }?.frame.size ?? NSScreen.main?.frame.size ?? CGSize(width: 1512, height: 982)
-    let view: AnyView = if let panel {
-      AnyView(PanelView(model: panel).background(Color(nsColor: .windowBackgroundColor)))
+    if let tab = tabs[what] {
+      let settings = SettingsWindow(model: p)
+      settings.show(tab)
+      keep.append(settings)
+      render(what, to: out) { AnyView(SettingsPane(model: p, tab: tab).background(Color(nsColor: .windowBackgroundColor))) }
     } else {
-      AnyView(VeilView(model: m, showsNotice: true, displayID: 0)
-        .frame(width: size.width, height: size.height)
-        .background(LinearGradient(colors: [Color(red: 0.16, green: 0.2, blue: 0.3), Color(red: 0.05, green: 0.07, blue: 0.12)], startPoint: .top, endPoint: .bottom)))
+      // The real popover, under a shield in the menu bar.
+      let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+      item.button?.image = StatusIcon.image(what == "mini" ? .arming(0.48) : .idle)
+      let panel = Panel(model: p)
+      panel.anchor = { item.button }
+      let page = p.page, step = p.introStep
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        panel.show()
+        p.page = page  // show() opens on the intro until it has been seen
+        p.introStep = step
+      }
+      keep += [item, panel]
+      render(what, to: out) { AnyView(PanelView(model: p).background(Color(nsColor: .windowBackgroundColor))) }
     }
-    let renderer = ImageRenderer(content: view)
+  }
+  DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+    _ = keep
+    exit(0)
+  }
+  app.run()
+}
+
+/// `view` to `out` as a PNG at 2×, 2.6 s from now: once the stage has played in.
+private func render(_ what: String, to out: String?, _ view: @escaping () -> AnyView) {
+  guard let out else { return }
+  DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
+    let renderer = ImageRenderer(content: view())
     renderer.scale = 2
     guard let cg = renderer.cgImage, let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else {
       print("render failed")
@@ -415,9 +465,45 @@ func snapshotCommand(_ what: String, out: String?) {
     try? png.write(to: URL(fileURLWithPath: out))
     log("rendered \(what) to \(out)")
   }
-  DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
-    _ = window
-    exit(0)
+}
+
+/// The menu-bar shield in every look, the landing pop's overshoot included, on a light and a dark
+/// menu bar, at 4×.
+private func renderIcons(to out: String) -> Bool {
+  let looks: [(StatusIcon.Look, CGFloat)] = [(.idle, 1), (.arming(0.3), 1), (.arming(0.7), 1), (.armed, 1), (.partial, 1), (.test, 1),
+                                             (.alarm, 1), (.clear, 1), (.clear, 1.25), (.badge, 1)]
+  let cell: CGFloat = 30, zoom: CGFloat = 4
+  let size = NSSize(width: cell * CGFloat(looks.count), height: cell * 2)
+  guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * zoom), pixelsHigh: Int(size.height * zoom),
+                                   bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                   bytesPerRow: 0, bitsPerPixel: 0) else { return false }
+  rep.size = size
+  NSGraphicsContext.saveGraphicsState()
+  NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+  for (row, name) in [NSAppearance.Name.aqua, .darkAqua].enumerated() {
+    NSAppearance(named: name)?.performAsCurrentDrawingAppearance {
+      let bar = NSRect(x: 0, y: CGFloat(1 - row) * cell, width: size.width, height: cell)
+      NSColor(white: row == 0 ? 0.93 : 0.16, alpha: 1).setFill()
+      bar.fill()
+      for (i, (look, scale)) in looks.enumerated() {
+        let image = StatusIcon.image(look, scale: scale)
+        let r = NSRect(x: CGFloat(i) * cell + 6, y: bar.minY + 6, width: 18, height: 18)
+        guard image.isTemplate else {
+          image.draw(in: r)
+          continue
+        }
+        // As the menu bar tints a template: black on a light bar, white on a dark one.
+        let tint = row == 0 ? NSColor.black : NSColor.white
+        NSImage(size: image.size, flipped: false) { rect in
+          image.draw(in: rect)
+          tint.set()
+          rect.fill(using: .sourceAtop)
+          return true
+        }.draw(in: r)
+      }
+    }
   }
-  app.run()
+  NSGraphicsContext.restoreGraphicsState()
+  guard let png = rep.representation(using: .png, properties: [:]) else { return false }
+  return (try? png.write(to: URL(fileURLWithPath: out))) != nil
 }

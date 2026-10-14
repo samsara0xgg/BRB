@@ -82,9 +82,16 @@ enum StatusIcon {
     return image
   }
 
-  /// The landing pop: in from 60 %, over to 115 %, settling at 100 %.
+  /// The landing pop over its 0.62 s: in from 40 %, over to 125 % (the most the 18-point image
+  /// holds), back under to 94 %, settling at 100 %.
   static func pop(_ p: Double) -> CGFloat {
-    p < 0.45 ? 0.6 + 0.55 * Ease.out(p / 0.45) : 1.15 - 0.15 * Ease.out((p - 0.45) / 0.55)
+    let frames: [(Double, Double)] = [(0, 0.4), (0.45, 1.25), (0.72, 0.94), (1, 1)]
+    guard p > 0 else { return 0.4 }
+    guard p < 1 else { return 1 }
+    for (a, b) in zip(frames, frames.dropFirst()) where p <= b.0 {
+      return CGFloat(a.1 + (b.1 - a.1) * Ease.out((p - a.0) / (b.0 - a.0)))
+    }
+    return 1
   }
 
   private static func draw(_ look: Look, _ cg: CGContext) {

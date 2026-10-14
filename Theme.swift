@@ -132,17 +132,20 @@ struct Tile: View {
   }
 }
 
-/// A key as printed on the keyboard: "esc", "↩", the Touch ID key.
+/// A key as printed on the keyboard: "esc", "↩", the Touch ID key. `dark`: the frosted screen's,
+/// larger and white.
 struct Keycap<Label: View>: View {
   var dark = false
   @ViewBuilder let label: Label
 
   var body: some View {
     label
-      .padding(.horizontal, 6)
-      .frame(minWidth: 24, minHeight: 22)
+      .foregroundStyle(dark ? AnyShapeStyle(Color.white) : AnyShapeStyle(HierarchicalShapeStyle.primary))
+      .padding(.horizontal, dark ? 7 : 6)
+      .frame(minWidth: dark ? 32 : 24, minHeight: dark ? 26 : 22)
       .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(dark ? Color.white.opacity(0.16) : Theme.ink.opacity(0.1)))
       .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(dark ? Color.white.opacity(0.32) : Theme.ink.opacity(0.16), lineWidth: 0.5))
+      .shadow(color: .black.opacity(dark ? 0.25 : 0), radius: 0, y: 1)
   }
 }
 

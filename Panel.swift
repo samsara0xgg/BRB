@@ -9,14 +9,15 @@ import SwiftUI
 /// where the Mac is, a note for the screen, what is on, and the last few sessions. Anything missing
 /// is listed on top and fixed in place (A2); everything else lives in Settings.
 final class Panel: NSObject, NSPopoverDelegate {
-  let model = PanelModel()
+  let model: PanelModel
   /// The menu-bar button the panel hangs from.
   var anchor: () -> NSStatusBarButton? = { nil }
   private let popover = NSPopover()
   private var monitor: Any?
   private var poll: Timer?
 
-  override init() {
+  init(model: PanelModel = PanelModel()) {
+    self.model = model
     super.init()
     popover.behavior = .transient
     popover.animates = true
@@ -118,6 +119,19 @@ struct Check: Identifiable, Equatable {
 /// What arming needs, checked without side effects. The sudo check runs off the main thread (audit
 /// L5); `sleep` passes on what it said last time, for the checks that run every second.
 enum Preflight {
+  /// What the checks are read from: all fine unless said otherwise, for the snapshot command.
+  struct Facts {
+    var trusted = true
+    var camera = AVAuthorizationStatus.authorized
+    var hasCamera = true
+    var speakers = true
+    var touchID = true
+    var secureInput = false
+    var lock = true
+    var sleep = true
+    var push = true
+  }
+
   static func run(sleep known: Bool? = nil, _ done: @escaping ([Check]) -> Void) {
     let trusted = AXIsProcessTrusted()
     let status = AVCaptureDevice.authorizationStatus(for: .video)
@@ -127,33 +141,39 @@ enum Preflight {
     let touchID = LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
     let secure = IsSecureEventInputEnabled()
     let lock = GuardApp.lockScreen != nil
+    let push = Push.enabled
     DispatchQueue.global(qos: .userInitiated).async {
       let sleep = known ?? sleepRuleInstalled()
       DispatchQueue.main.async {
-        done([
-          Check(id: .accessibility, title: L("Accessibility"),
-                detail: trusted ? L("Notices the keyboard and trackpad") : L("Needed to notice the keyboard and trackpad"), ok: trusted),
-          Check(id: .camera, title: L("Camera"),
-                detail: !camera ? L("No built-in camera: an alarm won't be recorded")
-                  : status == .authorized ? L("Films only around an alarm")
-                  : status == .notDetermined ? L("Allow it so an alarm can be recorded") : L("Turned off for BRB in System Settings"),
-                ok: camera && status == .authorized, optional: !camera, askable: camera && status == .notDetermined),
-          Check(id: .sleep, title: L("Stay awake with the lid shut"),
-                detail: sleep ? L("Keeps guarding with the lid closed") : L("Needs an admin rule, installed once with your password"), ok: sleep),
-          Check(id: .speakers, title: L("Speakers"),
-                detail: speakers ? L("The siren plays on the built-in speakers") : L("No built-in speakers found"), ok: speakers),
-          Check(id: .touchID, title: L("Touch ID"),
-                detail: touchID ? L("Rest a finger to stop guarding") : L("Unlock the Mac to stop guarding instead"), ok: touchID, optional: true),
-          Check(id: .push, title: L("Phone alerts"),
-                detail: Push.enabled ? L("Alarms reach your phone") : L("Off: alarms stay on this Mac"), ok: Push.enabled, optional: true),
-          Check(id: .secureInput, title: L("Secure keyboard entry"),
-                detail: secure ? L("A password field or Terminal's Secure Keyboard Entry is on, so keys would slip past. Close it first.") : L("Not on"),
-                ok: !secure, quiet: true),
-          Check(id: .lock, title: L("Lock screen"),
-                detail: lock ? L("Locks the screen during an alarm") : L("The system's lock function is unavailable"), ok: lock, quiet: true),
-        ])
+        done(checks(Facts(trusted: trusted, camera: status, hasCamera: camera, speakers: speakers, touchID: touchID,
+                          secureInput: secure, lock: lock, sleep: sleep, push: push)))
       }
     }
+  }
+
+  static func checks(_ f: Facts) -> [Check] {
+    [
+      Check(id: .accessibility, title: L("Accessibility"),
+            detail: f.trusted ? L("Notices the keyboard and trackpad") : L("Needed to notice the keyboard and trackpad"), ok: f.trusted),
+      Check(id: .camera, title: L("Camera"),
+            detail: !f.hasCamera ? L("No built-in camera: an alarm won't be recorded")
+              : f.camera == .authorized ? L("Films only around an alarm")
+              : f.camera == .notDetermined ? L("Allow it so an alarm can be recorded") : L("Turned off for BRB in System Settings"),
+            ok: f.hasCamera && f.camera == .authorized, optional: !f.hasCamera, askable: f.hasCamera && f.camera == .notDetermined),
+      Check(id: .sleep, title: L("Stay awake with the lid shut"),
+            detail: f.sleep ? L("Keeps guarding with the lid closed") : L("Needs an admin rule, installed once with your password"), ok: f.sleep),
+      Check(id: .speakers, title: L("Speakers"),
+            detail: f.speakers ? L("The siren plays on the built-in speakers") : L("No built-in speakers found"), ok: f.speakers),
+      Check(id: .touchID, title: L("Touch ID"),
+            detail: f.touchID ? L("Rest a finger to stop guarding") : L("Unlock the Mac to stop guarding instead"), ok: f.touchID, optional: true),
+      Check(id: .push, title: L("Phone alerts"),
+            detail: f.push ? L("Alarms reach your phone") : L("Off: alarms stay on this Mac"), ok: f.push, optional: true),
+      Check(id: .secureInput, title: L("Secure keyboard entry"),
+            detail: f.secureInput ? L("A password field or Terminal's Secure Keyboard Entry is on, so keys would slip past. Close it first.") : L("Not on"),
+            ok: !f.secureInput, quiet: true),
+      Check(id: .lock, title: L("Lock screen"),
+            detail: f.lock ? L("Locks the screen during an alarm") : L("The system's lock function is unavailable"), ok: f.lock, quiet: true),
+    ]
   }
 
   /// Asks sudo whether the rule is there, without running pmset (so nothing changes).
@@ -222,7 +242,7 @@ final class PanelModel: ObservableObject {
   @Published var fixRows: [Check] = []
   @Published var setupTotal = 0
   @Published var checking = false
-  @Published var place = Prefs.place { didSet { Prefs.place = place } }
+  @Published var place = Prefs.place { didSet { if !canned { Prefs.place = place } } }
   /// Cut at the limit, never silently: the field shakes instead (audit B2).
   @Published var note = Prefs.note {
     didSet {
@@ -230,7 +250,7 @@ final class PanelModel: ObservableObject {
         note = String(note.prefix(Prefs.noteLimit))
         noteBump += 1
       }
-      Prefs.note = note
+      if !canned { Prefs.note = note }
     }
   }
   @Published var noteBump = 0
@@ -240,12 +260,12 @@ final class PanelModel: ObservableObject {
   @Published var bloom = 0
   /// ⌥ held: a silent run, this once (audit A5).
   @Published var optionHeld = false
-  @Published var volume = Double(Alarm.loudVolume * 100) { didSet { Alarm.loudVolume = Float32(volume / 100) } }
-  @Published var testMode = Prefs.testMode { didSet { Prefs.testMode = testMode } }
-  @Published var veil = Prefs.veil { didSet { Prefs.veil = veil } }
+  @Published var volume = Double(Alarm.loudVolume * 100) { didSet { if !canned { Alarm.loudVolume = Float32(volume / 100) } } }
+  @Published var testMode = Prefs.testMode { didSet { if !canned { Prefs.testMode = testMode } } }
+  @Published var veil = Prefs.veil { didSet { if !canned { Prefs.veil = veil } } }
   @Published var pushOn = Push.enabled {
     didSet {
-      guard pushOn != oldValue else { return }
+      guard pushOn != oldValue, !canned else { return }
       Push.enabled = pushOn
       poll()
     }
@@ -278,13 +298,16 @@ final class PanelModel: ObservableObject {
   var onIntro: () -> Void = {}
   /// The panel showed the alarms: the menu-bar shield drops its red dot.
   var onSeen: () -> Void = {}
+  /// The snapshot command's: it shows what it was given, never this Mac's checks or history.
+  let canned: Bool
   private var sleepRule: Bool?
   private var folds: Set<Check.ID> = []
   private var awaiting: Timer?
   private var resetAsk = 0
 
-  init() {
-    refreshChecks()
+  init(canned: Bool = false) {
+    self.canned = canned
+    if !canned { refreshChecks() }
   }
 
   var toFix: Int { checks.filter { !$0.ok && !$0.optional }.count }
@@ -295,10 +318,20 @@ final class PanelModel: ObservableObject {
 
   func check(_ id: Check.ID) -> Check? { checks.first { $0.id == id } }
 
+  /// What is on, for the ⋯ menu and the status chip's tooltip. Read-only: only "Settings…" opens
+  /// Settings (Allen, 2026-10-14).
+  var statusRows: [(symbol: String, title: String, on: Bool)] {
+    [("video", L("Camera"), check(.camera)?.ok == true),
+     ("iphone", L("Phone alerts"), pushOn),
+     ("laptopcomputer", L("Stay awake with the lid shut"), check(.sleep)?.ok == true),
+     ("touchid", L("Touch ID"), check(.touchID)?.ok == true)]
+  }
+
   func isNew(_ s: Session) -> Bool { s.alarmed && !s.test && s.ended > newSince }
 
   /// The panel opened: what it shows now is not new any more afterwards.
   func opened() {
+    guard !canned else { return }
     newSince = Prefs.alarmsSeenAt
     Prefs.alarmsSeenAt = Date()
     onSeen()
@@ -306,6 +339,7 @@ final class PanelModel: ObservableObject {
   }
 
   func refresh() {
+    guard !canned else { return }
     place = Prefs.place
     note = Prefs.note
     volume = Double(Alarm.loudVolume * 100)
@@ -346,6 +380,7 @@ final class PanelModel: ObservableObject {
 
   /// Once a second while the panel or Settings shows.
   func poll() {
+    guard !canned else { return }
     Preflight.run(sleep: sleepRule) { [weak self] in self?.apply($0) }
   }
 
@@ -615,15 +650,8 @@ private struct MainPage: View {
             .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
         }
         Hero(model: model)
-        PlacePicker(selection: $model.place)
-          .padding(.top, 14)
-        PlaceHint(place: model.place)
-          .padding(.top, 7)
-          .padding(.horizontal, 2)
-        NoteField(model: model)
-          .padding(.top, 6)
-        Caps(model: model)
-          .padding(.top, 14)
+        TripCard(model: model)
+          .padding(.top, 12)
         Recent(model: model)
       case .arming:
         MiniCountdown(model: model)
@@ -649,6 +677,7 @@ private struct Header: View {
         .font(.system(size: 13, weight: .semibold))
       if showsStatus {
         StatusChip(tone: tone, text: chip)
+          .help(statusTip)
       }
       Spacer(minLength: 6)
       if showsStatus && model.phase == .idle {
@@ -656,6 +685,12 @@ private struct Header: View {
       }
     }
     .frame(height: 28)
+  }
+
+  /// The ⋯ menu's status rows again, for whoever points at the chip.
+  private var statusTip: String {
+    guard model.phase == .idle else { return "" }
+    return model.statusRows.map { row in row.title + " · " + (row.on ? L("On") : L("Off")) }.joined(separator: "\n")
   }
 
   private var tone: StatusChip.Tone {
@@ -775,7 +810,8 @@ func replay(_ animation: Animation, _ set: @escaping (Bool) -> Void) {
   }
 }
 
-/// ⋯: Settings, how it works, the recordings, quit. A native menu, with its shortcuts.
+/// ⋯: what is on (read-only, as the Battery menu shows its power source), then Settings, how it
+/// works, the recordings, quit. A native menu, with its shortcuts and an icon on every item.
 private struct MoreButton: View {
   @ObservedObject var model: PanelModel
   @State private var hover = false
@@ -797,18 +833,26 @@ private struct MoreButton: View {
 
   private func show() {
     let menu = NSMenu()
-    func item(_ title: String, _ key: String = "", _ run: @escaping () -> Void) {
+    for row in model.statusRows {
+      let i = NSMenuItem(title: row.title, action: nil, keyEquivalent: "")  // no action: shown, not chosen
+      i.image = NSImage(systemSymbolName: row.symbol, accessibilityDescription: nil)
+      i.badge = NSMenuItemBadge(string: row.on ? L("On") : L("Off"))
+      menu.addItem(i)
+    }
+    menu.addItem(.separator())
+    func item(_ symbol: String, _ title: String, _ key: String = "", _ run: @escaping () -> Void) {
       let action = MenuAction(run)
       let i = NSMenuItem(title: title, action: #selector(MenuAction.fire), keyEquivalent: key)
       i.target = action
       i.representedObject = action  // the item keeps its action alive
+      i.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
       menu.addItem(i)
     }
-    item(L("Settings…"), ",") { model.onSettings(.general) }
-    item(L("How it works")) { model.showIntro() }
-    item(L("Open Recordings Folder")) { model.reveal(nil) }
+    item("gearshape", L("Settings…"), ",") { model.onSettings(.general) }
+    item("questionmark.circle", L("How it works")) { model.showIntro() }
+    item("folder", L("Open Recordings Folder")) { model.reveal(nil) }
     menu.addItem(.separator())
-    item(L("Quit BRB"), "q") { NSApp.terminate(nil) }
+    item("power", L("Quit BRB"), "q") { NSApp.terminate(nil) }
     menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
   }
 }
@@ -1102,10 +1146,10 @@ private struct PlacePicker: View {
           .foregroundStyle(on ? Theme.knobText : Color.secondary)
           .padding(.horizontal, 4)
           .frame(maxWidth: .infinity)
-          .frame(height: 28)
+          .frame(height: 30)
           .background {
             if on {
-              RoundedRectangle(cornerRadius: 7, style: .continuous)
+              RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(Theme.knob)
                 .shadow(color: .black.opacity(0.2), radius: 1.25, y: 1)
                 .matchedGeometryEffect(id: "knob", in: knob)
@@ -1117,13 +1161,33 @@ private struct PlacePicker: View {
         .accessibilityAddTraits(on ? .isSelected : [])
       }
     }
-    .padding(2)
-    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.fill))
     .animation(Theme.slide, value: selection)
   }
 }
 
-/// What counts at this place. All three lines are laid out, so the panel keeps its height.
+/// Where it is and the note: one card instead of three boxes.
+private struct TripCard: View {
+  @ObservedObject var model: PanelModel
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      PlacePicker(selection: $model.place)
+      PlaceHint(place: model.place)
+        .padding(EdgeInsets(top: 7, leading: 8, bottom: 9, trailing: 8))
+      Rectangle()
+        .fill(Theme.separator)
+        .frame(height: 0.5)
+        .padding(.horizontal, 8)
+        .padding(.bottom, 3)
+      NoteField(model: model)
+    }
+    .padding(4)
+    .background(RoundedRectangle(cornerRadius: 13, style: .continuous).fill(Theme.fill))
+    .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).strokeBorder(Theme.separator, lineWidth: 0.5))
+  }
+}
+
+/// What counts at this place. All three lines are laid out, so the card keeps its height.
 private struct PlaceHint: View {
   let place: Place
 
@@ -1185,93 +1249,15 @@ private struct NoteField: View {
       .help(L("Clear"))
       .accessibilityLabel(L("Clear"))
     }
-    .padding(.leading, 10)
-    .padding(.trailing, 8)
+    .padding(.leading, 8)
+    .padding(.trailing, 6)
     .frame(height: 34)
-    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(focused ? Color.primary.opacity(0.04) : Theme.fill))
+    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(focused ? Color.primary.opacity(0.05) : Color.clear))
     .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Theme.amberDeep.opacity(0.9), lineWidth: 1).opacity(focused ? 1 : 0))
     .overlay(RoundedRectangle(cornerRadius: 12.5, style: .continuous).strokeBorder(Theme.amber.opacity(0.32), lineWidth: 3.5).padding(-3.5).opacity(focused ? 1 : 0))
     .animation(.easeOut(duration: 0.18), value: focused)
     .modifier(Shake(model.noteBump, amount: 5))
     .animation(.linear(duration: 0.32), value: model.noteBump)
-  }
-}
-
-/// What is on, at a glance: the camera, the phone, staying awake with the lid shut, Touch ID. Each
-/// opens its place in Settings.
-private struct Caps: View {
-  @ObservedObject var model: PanelModel
-
-  var body: some View {
-    HStack(spacing: 6) {
-      CapTile(title: L("Camera"), symbol: "video", status: camera, help: model.check(.camera)?.detail) { model.onSettings(.recordings) }
-      CapTile(title: L("Phone"), symbol: "iphone", status: model.pushOn ? .on : .off, help: model.check(.push)?.detail) { model.onSettings(.phone) }
-      CapTile(title: L("Lid shut"), symbol: "laptopcomputer", status: lid, help: model.check(.sleep)?.detail) { model.onSettings(.checks) }
-      CapTile(title: L("Touch ID"), symbol: "touchid", status: model.check(.touchID)?.ok == true ? .on : .off,
-              help: model.check(.touchID)?.detail) { model.onSettings(.checks) }
-    }
-  }
-
-  private var camera: CapTile.Status {
-    guard let c = model.check(.camera) else { return .off }
-    return c.ok ? .on : c.optional ? .off : .warn
-  }
-
-  private var lid: CapTile.Status {
-    guard let c = model.check(.sleep) else { return .off }
-    return c.ok ? .on : .warn
-  }
-}
-
-private struct CapTile: View {
-  enum Status { case on, off, warn }
-  let title: String
-  let symbol: String
-  let status: Status
-  let help: String?
-  let action: () -> Void
-  @State private var hover = false
-
-  var body: some View {
-    Button(action: action) {
-      VStack(spacing: 5) {
-        Image(systemName: symbol)
-          .font(.system(size: 16))
-          .foregroundStyle(.secondary)
-          .frame(height: 19)
-        Text(title)
-          .font(.system(size: 11, weight: .medium))
-          .lineLimit(1)
-          .minimumScaleFactor(0.8)
-      }
-      .frame(maxWidth: .infinity)
-      .padding(.top, 9)
-      .padding(.bottom, 8)
-      .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(hover ? Theme.fill2 : Theme.fill))
-      .overlay(alignment: .topTrailing) {
-        Circle()
-          .fill(dot)
-          .frame(width: 6, height: 6)
-          .padding(.top, 7)
-          .padding(.trailing, 8)
-      }
-      .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-    .buttonStyle(Pressable(scale: 0.95))
-    .onHover { hover = $0 }
-    .animation(.easeOut(duration: 0.12), value: hover)
-    .animation(.easeInOut(duration: 0.3), value: status)
-    .help(help ?? title)
-    .accessibilityLabel(title)
-    .accessibilityValue(help ?? "")
-  }
-
-  private var dot: Color {
-    switch status {
-    case .on: Theme.green
-    case .off: Color.secondary.opacity(0.5)
-    case .warn: Theme.amberDeep
-    }
   }
 }
 
@@ -1288,7 +1274,7 @@ private struct Recent: View {
           .font(.system(size: 11, weight: .semibold))
           .foregroundStyle(.tertiary)
           .padding(.horizontal, 4)
-          .padding(.top, 16)
+          .padding(.top, 20)
           .padding(.bottom, 4)
         ForEach(list, id: \.armed) { s in
           RecentRow(session: s, isNew: model.isNew(s)) { model.reveal(s.clip) }
@@ -1317,7 +1303,7 @@ private struct RecentRow: View {
   }
 
   private var row: some View {
-    HStack(spacing: 10) {
+    HStack(spacing: 8) {
       tile
       VStack(alignment: .leading, spacing: 1) {
         Text(session.title)
@@ -1353,14 +1339,23 @@ private struct RecentRow: View {
     .animation(.easeOut(duration: 0.15), value: hover)
   }
 
+  /// Only an alarm is in color; the quiet sessions are a light ring, so the eye goes to the red one.
   private var tile: some View {
-    let color = session.alarmed ? Theme.red : session.quiet ? Theme.green : Color.secondary
-    let symbol = session.alarmed ? "exclamationmark" : session.quiet ? "checkmark" : "minus"
-    return Image(systemName: symbol)
-      .font(.system(size: 12, weight: .bold))
-      .foregroundStyle(color)
-      .frame(width: 26, height: 26)
-      .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color.opacity(0.15)))
+    let alarmed = session.alarmed
+    return Image(systemName: alarmed ? "exclamationmark" : session.quiet ? "checkmark" : "minus")
+      .font(.system(size: 10.5, weight: .bold))
+      .foregroundStyle(alarmed ? Color.white : Color.secondary)
+      .frame(width: 22, height: 22)
+      .background {
+        if alarmed {
+          Circle()
+            .fill(Theme.red)
+            .shadow(color: Theme.redDeep.opacity(0.35), radius: 1.5, y: 1)
+        } else {
+          Circle().strokeBorder(Theme.separator, lineWidth: 1)
+        }
+      }
+      .padding(.horizontal, 2)
   }
 }
 
@@ -1636,7 +1631,7 @@ private struct MemoryFilm: View {
     GeometryReader { g in
       let w = g.size.width - 44
       ZStack(alignment: .topLeading) {
-        Text(verbatim: L("in memory") + " · 10 s")
+        Text(L("in memory · 10 s"))
           .font(.system(size: 10.5, weight: .semibold))
           .tracking(0.4)
           .foregroundStyle(.white.opacity(0.6))
