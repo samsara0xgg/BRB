@@ -5,16 +5,22 @@ import CoreImage.CIFilterBuiltins
 import LocalAuthentication
 import SwiftUI
 
-/// The menu-bar panel: arm, where the Mac is, a note for the screen, siren volume, test mode, the
-/// frosted screen, the phone, recordings and the last few sessions. When something is missing it
-/// says what, and fixes what it can (audit M4: no more modal alerts).
-final class Panel {
+/// The menu-bar panel holds only what matters before stepping away (audit A1): the start button,
+/// where the Mac is, a note for the screen, what is on, and the last few sessions. Anything missing
+/// is listed on top and fixed in place (A2); everything else lives in Settings.
+final class Panel: NSObject, NSPopoverDelegate {
   let model = PanelModel()
+  /// The menu-bar button the panel hangs from.
+  var anchor: () -> NSStatusBarButton? = { nil }
   private let popover = NSPopover()
+  private var monitor: Any?
+  private var poll: Timer?
 
-  init() {
+  override init() {
+    super.init()
     popover.behavior = .transient
     popover.animates = true
+    popover.delegate = self
     let host = NSHostingController(rootView: PanelView(model: model))
     host.sizingOptions = .preferredContentSize
     popover.contentViewController = host
@@ -23,17 +29,73 @@ final class Panel {
 
   var isShown: Bool { popover.isShown }
 
-  func toggle(from button: NSStatusBarButton) {
-    if popover.isShown { close(); return }
-    model.page = Prefs.introSeen ? .main : .intro
-    model.refresh()
+  func toggle() {
+    if popover.isShown { close() } else { show() }
+  }
+
+  /// `intro`: the three cards, from Settings' "Show again".
+  func show(intro: Bool = false) {
+    guard let button = anchor() else { return }
+    if intro || !Prefs.introSeen {
+      model.introStep = 0
+      model.introForward = true
+      model.page = .intro
+    } else if !popover.isShown {
+      model.page = .main
+    }
+    model.opened()
     NSApp.activate(ignoringOtherApps: true)  // an accessory app's text field needs this for typing
-    popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-    popover.contentViewController?.view.window?.makeKey()
+    if !popover.isShown { popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY) }
+    guard let window = popover.contentViewController?.view.window else { return }
+    window.makeKey()
+    // The note field waits for a click instead of taking the keys: ↩ starts, ← → change the place.
+    window.makeFirstResponder(nil)
+    DispatchQueue.main.async { window.makeFirstResponder(nil) }
+    start()
   }
 
   func close() {
     if popover.isShown { popover.performClose(nil) }
+  }
+
+  func popoverDidClose(_ notification: Notification) {
+    stop()
+    model.optionHeld = false
+  }
+
+  /// While shown: the checks once a second, so a fix made in System Settings ticks off by itself
+  /// (audit B8), and the keys: ⌥ for a silent run, ← → for the place or the intro's cards.
+  private func start() {
+    stop()
+    let t = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.model.poll() }
+    RunLoop.main.add(t, forMode: .common)
+    poll = t
+    monitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
+      guard let self, event.window === popover.contentViewController?.view.window else { return event }
+      return handle(event) ? nil : event
+    }
+  }
+
+  private func stop() {
+    poll?.invalidate()
+    poll = nil
+    if let monitor { NSEvent.removeMonitor(monitor) }
+    monitor = nil
+  }
+
+  private func handle(_ event: NSEvent) -> Bool {
+    if event.type == .flagsChanged {
+      let held = event.modifierFlags.contains(.option)
+      if model.optionHeld != held { model.optionHeld = held }
+      return false
+    }
+    guard !(event.window?.firstResponder is NSText),
+          event.modifierFlags.intersection([.command, .control, .option]).isEmpty else { return false }
+    switch event.keyCode {
+    case 123: return model.step(-1)
+    case 124: return model.step(1)
+    default: return false
+    }
   }
 }
 
@@ -53,14 +115,12 @@ struct Check: Identifiable, Equatable {
   var shown: Bool { !quiet || !ok }
 }
 
-/// What arming needs, checked without side effects unless `prompt` is set (then macOS asks for
-/// Accessibility and the camera). The sudo check runs off the main thread (audit L5).
+/// What arming needs, checked without side effects. The sudo check runs off the main thread (audit
+/// L5); `sleep` passes on what it said last time, for the checks that run every second.
 enum Preflight {
-  static func run(prompt: Bool, _ done: @escaping ([Check]) -> Void) {
-    let trusted = prompt ? AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
-                         : AXIsProcessTrusted()
+  static func run(sleep known: Bool? = nil, _ done: @escaping ([Check]) -> Void) {
+    let trusted = AXIsProcessTrusted()
     let status = AVCaptureDevice.authorizationStatus(for: .video)
-    if prompt && status == .notDetermined { AVCaptureDevice.requestAccess(for: .video) { _ in } }
     let camera = Recorder.camera != nil
     let speakers = Alarm.builtInSpeakers() != nil
     var error: NSError?
@@ -68,7 +128,7 @@ enum Preflight {
     let secure = IsSecureEventInputEnabled()
     let lock = GuardApp.lockScreen != nil
     DispatchQueue.global(qos: .userInitiated).async {
-      let sleep = sleepRuleInstalled()
+      let sleep = known ?? sleepRuleInstalled()
       DispatchQueue.main.async {
         done([
           Check(id: .accessibility, title: L("Accessibility"),
@@ -85,11 +145,12 @@ enum Preflight {
           Check(id: .touchID, title: L("Touch ID"),
                 detail: touchID ? L("Rest a finger to stop guarding") : L("Unlock the Mac to stop guarding instead"), ok: touchID, optional: true),
           Check(id: .push, title: L("Phone alerts"),
-                detail: Push.enabled ? L("On") : L("Off: alarms stay on this Mac"), ok: Push.enabled, optional: true),
+                detail: Push.enabled ? L("Alarms reach your phone") : L("Off: alarms stay on this Mac"), ok: Push.enabled, optional: true),
           Check(id: .secureInput, title: L("Secure keyboard entry"),
-                detail: L("A password field or Terminal's Secure Keyboard Entry is on, so keys would slip past. Close it first."),
+                detail: secure ? L("A password field or Terminal's Secure Keyboard Entry is on, so keys would slip past. Close it first.") : L("Not on"),
                 ok: !secure, quiet: true),
-          Check(id: .lock, title: L("Lock screen"), detail: L("The system's lock function is unavailable"), ok: lock, quiet: true),
+          Check(id: .lock, title: L("Lock screen"),
+                detail: lock ? L("Locks the screen during an alarm") : L("The system's lock function is unavailable"), ok: lock, quiet: true),
         ])
       }
     }
@@ -139,41 +200,110 @@ enum Preflight {
   }
 }
 
+/// A recording on disk, and the session it belongs to when the history still has it.
+struct Clip: Identifiable {
+  let url: URL
+  let date: Date
+  let session: Session?
+  var bytes: Int64 = 0
+  var id: URL { url }
+}
+
+/// What the panel and the Settings window show. One model for both, so they never disagree.
 final class PanelModel: ObservableObject {
-  enum Page { case intro, main, notReady, push, live }
-  @Published var page = Page.main { didSet { if page == .intro && oldValue != .intro { introStep = 0 } } }
+  enum Page { case intro, main }
+  @Published var page = Page.main
   @Published var introStep = 0
+  /// Which way the intro's cards move: set just before the step changes.
+  @Published var introForward = true
   @Published var phase = GuardApp.Phase.idle
   @Published var checks: [Check] = []
+  /// The "Before guarding" card: what was missing, each row ticked off and folded away (audit A2).
+  @Published var fixRows: [Check] = []
+  @Published var setupTotal = 0
+  @Published var checking = false
   @Published var place = Prefs.place { didSet { Prefs.place = place } }
+  /// Cut at the limit, never silently: the field shakes instead (audit B2).
   @Published var note = Prefs.note {
     didSet {
-      if note.count > Prefs.noteLimit { note = String(note.prefix(Prefs.noteLimit)) }
+      if note.count > Prefs.noteLimit {
+        note = String(note.prefix(Prefs.noteLimit))
+        noteBump += 1
+      }
       Prefs.note = note
     }
   }
+  @Published var noteBump = 0
+  /// The start button was pressed with something missing: it shakes and the card lights up.
+  @Published var lockedNudge = 0
+  /// The setup card folded away: the start button lights up.
+  @Published var bloom = 0
+  /// ⌥ held: a silent run, this once (audit A5).
+  @Published var optionHeld = false
   @Published var volume = Double(Alarm.loudVolume * 100) { didSet { Alarm.loudVolume = Float32(volume / 100) } }
   @Published var testMode = Prefs.testMode { didSet { Prefs.testMode = testMode } }
   @Published var veil = Prefs.veil { didSet { Prefs.veil = veil } }
   @Published var pushOn = Push.enabled {
     didSet {
+      guard pushOn != oldValue else { return }
       Push.enabled = pushOn
-      refreshChecks()
+      poll()
     }
   }
-  @Published var recent: [Session] = []
-  @Published var clips = 0
-  @Published var testPush: Bool?  // nil: not sent, or sending
+  @Published var history: [Session] = []
+  @Published var clips: [Clip] = []
+  /// Real alarms that ended after this are new to the owner: "New" on their row.
+  @Published var newSince = Date.distantFuture
+  /// The countdown, for the panel when the frosted screen is off.
+  @Published var remaining = 5
+  @Published var countdownFrom = Date()
+  @Published var testPush: Bool?
   @Published var sending = false
   @Published var copied: String?
   @Published var installing = false
   @Published var confirmReset = false
+  @Published var linkReset = false
   @Published var liveLink = Live.link.absoluteString
-  var onArm: () -> Void = {}
-  var onClose: () -> Void = {}
+  @Published var previewing = false
+  @Published var previewAt = Date.distantPast
+  @Published var settingsTab = SettingsTab.general
 
-  var ready: Bool { !checks.isEmpty && checks.allSatisfy { $0.ok || $0.optional } }
+  /// `true`: a silent run this once.
+  var onArm: (Bool) -> Void = { _ in }
+  var onCancel: () -> Void = {}
+  var onClose: () -> Void = {}
+  /// A fix made outside BRB landed: show the panel again so the row ticks off in view.
+  var onReopen: () -> Void = {}
+  var onSettings: (SettingsTab) -> Void = { _ in }
+  var onIntro: () -> Void = {}
+  /// The panel showed the alarms: the menu-bar shield drops its red dot.
+  var onSeen: () -> Void = {}
+  private var sleepRule: Bool?
+  private var folds: Set<Check.ID> = []
+  private var awaiting: Timer?
+  private var resetAsk = 0
+
+  init() {
+    refreshChecks()
+  }
+
   var toFix: Int { checks.filter { !$0.ok && !$0.optional }.count }
+  var ready: Bool { !checks.isEmpty && toFix == 0 }
+  /// Something is missing: the start button is a quiet well that says what to do first.
+  var locked: Bool { toFix > 0 }
+  var setupDone: Int { setupTotal - fixRows.filter { !$0.ok }.count }
+
+  func check(_ id: Check.ID) -> Check? { checks.first { $0.id == id } }
+
+  func isNew(_ s: Session) -> Bool { s.alarmed && !s.test && s.ended > newSince }
+
+  /// The panel opened: what it shows now is not new any more afterwards.
+  func opened() {
+    newSince = Prefs.alarmsSeenAt
+    Prefs.alarmsSeenAt = Date()
+    onSeen()
+    refresh()
+  }
 
   func refresh() {
     place = Prefs.place
@@ -182,60 +312,203 @@ final class PanelModel: ObservableObject {
     testMode = Prefs.testMode
     veil = Prefs.veil
     pushOn = Push.enabled
-    recent = History.load()
-    clips = Recorder.clips()
+    history = History.load()
+    clips = PanelModel.clips(history)
     liveLink = Live.link.absoluteString
     copied = nil
     confirmReset = false
     refreshChecks()
   }
 
-  func refreshChecks(prompt: Bool = false) {
-    Preflight.run(prompt: prompt) { [weak self] in self?.checks = $0 }
+  static func clips(_ history: [Session]) -> [Clip] {
+    let keys: Set<URLResourceKey> = [.contentModificationDateKey, .fileSizeKey]
+    let files = (try? FileManager.default.contentsOfDirectory(at: Recorder.folder, includingPropertiesForKeys: Array(keys))) ?? []
+    return files.filter { $0.pathExtension == "mov" }
+      .map { url -> Clip in
+        let values = try? url.resourceValues(forKeys: keys)
+        return Clip(url: url, date: values?.contentModificationDate ?? .distantPast,
+                    session: history.first { $0.clip == url.lastPathComponent }, bytes: Int64(values?.fileSize ?? 0))
+      }
+      .sorted { $0.date > $1.date }
+  }
+
+  /// Everything, the admin rule included (sudo, so not every second).
+  func refreshChecks(_ done: (() -> Void)? = nil) {
+    checking = true
+    Preflight.run { [weak self] checks in
+      guard let self else { return }
+      checking = false
+      sleepRule = checks.first { $0.id == .sleep }?.ok
+      apply(checks)
+      done?()
+    }
+  }
+
+  /// Once a second while the panel or Settings shows.
+  func poll() {
+    Preflight.run(sleep: sleepRule) { [weak self] in self?.apply($0) }
+  }
+
+  /// Settings' "Check again": the spinner stays long enough to be seen.
+  func checkAgain() {
+    checking = true
+    let start = Date()
+    Preflight.run { [weak self] checks in
+      guard let self else { return }
+      sleepRule = checks.first { $0.id == .sleep }?.ok
+      apply(checks)
+      DispatchQueue.main.asyncAfter(deadline: .now() + max(0, 0.6 - Date().timeIntervalSince(start))) { [weak self] in
+        self?.checking = false
+      }
+    }
+  }
+
+  /// New results: the card keeps the rows it listed, so a fixed one ticks, says what it does now and
+  /// folds away 0.95 s later; the last one takes the card with it.
+  func apply(_ new: [Check]) {
+    let first = checks.isEmpty
+    checks = new
+    var rows = fixRows.map { row in new.first { $0.id == row.id } ?? row }
+    let added = new.filter { c in c.shown && !c.ok && !c.optional && !rows.contains { $0.id == c.id } }
+    rows += added
+    let order = new.map(\.id)
+    rows.sort { (order.firstIndex(of: $0.id) ?? 0) < (order.firstIndex(of: $1.id) ?? 0) }
+    if fixRows.isEmpty { setupTotal = 0 }
+    setupTotal += added.count
+    if rows != fixRows {
+      if first || page != .main {
+        fixRows = rows
+      } else {
+        withAnimation(Theme.resize) { fixRows = rows }
+      }
+    }
+    for row in rows where row.ok && !folds.contains(row.id) {
+      folds.insert(row.id)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.95) { [weak self] in self?.fold(row.id) }
+    }
+  }
+
+  private func fold(_ id: Check.ID) {
+    folds.remove(id)
+    guard let i = fixRows.firstIndex(where: { $0.id == id }), fixRows[i].ok else { return }
+    withAnimation(Theme.out(0.42)) { _ = fixRows.remove(at: i) }
+    guard fixRows.isEmpty else { return }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.44) { [weak self] in
+      guard let self, fixRows.isEmpty else { return }
+      setupTotal = 0
+      bloom += 1
+    }
   }
 
   func arm() {
-    guard ready else {
-      page = .notReady
-      refreshChecks(prompt: true)
+    guard phase == .idle else { return }
+    guard !checks.isEmpty else {
+      refreshChecks { [weak self] in self?.arm() }
       return
     }
-    onClose()
-    onArm()
+    guard ready else {
+      lockedNudge += 1
+      return
+    }
+    let silentOnce = optionHeld && !testMode
+    if veil { onClose() }  // without the frosted screen the panel shows the countdown (audit A8)
+    onArm(silentOnce)
   }
 
-  /// The end of the introduction: either straight to a silent first run (via the readiness list
-  /// when something is missing), or to the panel.
+  func showIntro() {
+    introStep = 0
+    introForward = true
+    withAnimation(Theme.resize) { page = .intro }
+  }
+
+  func goIntro(_ i: Int) {
+    guard i != introStep, (0..<3).contains(i) else { return }
+    introForward = i > introStep
+    DispatchQueue.main.async { [weak self] in  // the cards read the direction before they move
+      withAnimation(Theme.slide) { self?.introStep = i }
+    }
+  }
+
+  /// ← and →: the intro's cards, or the place.
+  func step(_ d: Int) -> Bool {
+    if page == .intro {
+      let n = introStep + d
+      guard (0..<3).contains(n) else { return false }
+      goIntro(n)
+      return true
+    }
+    guard phase == .idle else { return false }
+    let all = Place.allCases
+    let i = all.firstIndex(of: place) ?? 0
+    place = all[(i + d + all.count) % all.count]
+    return true
+  }
+
+  /// The end of the introduction: either straight to a silent first run, or to the panel.
   func finishIntro(tryIt: Bool) {
     Prefs.introSeen = true
-    page = .main
+    withAnimation(Theme.resize) { page = .main }
     guard tryIt else { return }
     testMode = true
-    arm()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in self?.arm() }
   }
 
   func fix(_ check: Check) {
     switch check.id {
     case .accessibility:
-      refreshChecks(prompt: true)
+      // The prompt also puts BRB in the list; the panel comes back once the switch is on.
+      _ = AXIsProcessTrustedWithOptions([kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary)
       open("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+      onClose()
+      awaitGrant { AXIsProcessTrusted() }
     case .camera:
       if check.askable {
-        AVCaptureDevice.requestAccess(for: .video) { _ in DispatchQueue.main.async { self.refreshChecks() } }
+        AVCaptureDevice.requestAccess(for: .video) { granted in
+          DispatchQueue.main.async {
+            self.poll()
+            if granted { self.onReopen() }
+          }
+        }
       } else {
         open("x-apple.systempreferences:com.apple.preference.security?Privacy_Camera")
+        onClose()
+        awaitGrant { AVCaptureDevice.authorizationStatus(for: .video) == .authorized }
       }
     case .sleep:
       installing = true
-      Preflight.installSleepRule { [weak self] _ in
-        self?.installing = false
-        self?.refreshChecks()
+      Preflight.installSleepRule { [weak self] ok in
+        guard let self else { return }
+        installing = false
+        if ok {
+          sleepRule = true
+          onReopen()
+        }
+        refreshChecks()
       }
     case .push:
-      page = .push
+      onSettings(.phone)
     default:
       refreshChecks()
     }
+  }
+
+  /// Watches for a permission granted in System Settings, for three minutes at most.
+  private func awaitGrant(_ granted: @escaping () -> Bool) {
+    awaiting?.invalidate()
+    let start = Date()
+    let t = Timer(timeInterval: 1, repeats: true) { [weak self] timer in
+      guard let self else { timer.invalidate(); return }
+      if granted() {
+        timer.invalidate()
+        awaiting = nil
+        onReopen()
+      } else if Date().timeIntervalSince(start) > 180 {
+        timer.invalidate()
+        awaiting = nil
+      }
+    }
+    RunLoop.main.add(t, forMode: .common)
+    awaiting = t
   }
 
   func sendTestPush() {
@@ -251,22 +524,57 @@ final class PanelModel: ObservableObject {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(text, forType: .string)
     copied = what
-    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) { [weak self] in
       if self?.copied == what { self?.copied = nil }
     }
   }
 
-  /// First tap asks, the second resets: the old link stops working at once.
-  func resetLink() {
-    guard confirmReset else { confirmReset = true; return }
-    confirmReset = false
-    Live.resetLink()
-    liveLink = Live.link.absoluteString
+  /// "Reset link…" opens a line that says what happens; nobody answering folds it back after 5 s
+  /// (audit B3).
+  func askReset() {
+    withAnimation(Theme.out(0.3)) { confirmReset = true }
+    resetAsk += 1
+    let ask = resetAsk
+    DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+      guard let self, confirmReset, resetAsk == ask else { return }
+      withAnimation(Theme.out(0.3)) { confirmReset = false }
+    }
   }
 
-  func openRecordings() {
-    try? FileManager.default.createDirectory(at: Recorder.folder, withIntermediateDirectories: true)
-    NSWorkspace.shared.open(Recorder.folder)
+  func cancelReset() {
+    withAnimation(Theme.out(0.3)) { confirmReset = false }
+  }
+
+  func resetLink() {
+    Live.resetLink()
+    withAnimation(Theme.out(0.3)) {
+      confirmReset = false
+      liveLink = Live.link.absoluteString
+      linkReset = true
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) { [weak self] in
+      withAnimation(.easeOut(duration: 0.3)) { self?.linkReset = false }
+    }
+  }
+
+  /// 0.6 s of the siren at the set volume (audit B4).
+  func preview() {
+    guard phase == .idle, !previewing else { return }
+    previewing = true
+    previewAt = Date()
+    Alarm.preview()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) { [weak self] in self?.previewing = false }
+  }
+
+  /// A recording selected in Finder (audit A6, A7); without one, the folder.
+  func reveal(_ clip: String?) {
+    let url = clip.map { Recorder.folder.appendingPathComponent($0) }
+    if let url, FileManager.default.fileExists(atPath: url.path) {
+      NSWorkspace.shared.activateFileViewerSelecting([url])
+    } else {
+      try? FileManager.default.createDirectory(at: Recorder.folder, withIntermediateDirectories: true)
+      NSWorkspace.shared.open(Recorder.folder)
+    }
     onClose()
   }
 
@@ -277,33 +585,18 @@ final class PanelModel: ObservableObject {
 
 // MARK: - views
 
-private let amber = Color(red: 0xF6 / 255, green: 0xB5 / 255, blue: 0x44 / 255)
-private let ink = Color(red: 0x2B / 255, green: 0x1A / 255, blue: 0)
-private let green = Color(red: 0x34 / 255, green: 0xC7 / 255, blue: 0x59 / 255)
-private let amberDeep = Color(red: 0xF0 / 255, green: 0xA5 / 255, blue: 0x3A / 255)
-/// Sessions with an alarm in the recent list: dark amber on light, light amber on dark.
-private let warn = Color(nsColor: NSColor(name: nil) { appearance in
-  appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-    ? NSColor(srgbRed: 1, green: 0xC2 / 255, blue: 0x61 / 255, alpha: 1)
-    : NSColor(srgbRed: 0xB8 / 255, green: 0x6B / 255, blue: 0, alpha: 1)
-})
-
 struct PanelView: View {
   @ObservedObject var model: PanelModel
 
   var body: some View {
     Group {
       switch model.page {
-      case .intro: IntroPage(model: model)
-      case .main: MainPage(model: model)
-      case .notReady: NotReadyPage(model: model)
-      case .push: PushPage(model: model)
-      case .live: LivePage(model: model)
+      case .intro: IntroPage(model: model).transition(.opacity)
+      case .main: MainPage(model: model).transition(.opacity)
       }
     }
     .padding(14)
     .frame(width: 340)
-    .animation(.easeInOut(duration: 0.2), value: model.page)
   }
 }
 
@@ -311,576 +604,1191 @@ private struct MainPage: View {
   @ObservedObject var model: PanelModel
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      header
-      if model.phase == .idle {
-        armButton
-        VStack(alignment: .leading, spacing: 8) {
-          HStack(spacing: 8) {
-            Text(L("Place")).font(.system(size: 13))
-            Spacer(minLength: 8)
-            PlacePicker(selection: $model.place)
-          }
-          Text(placeHint).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-          NoteField(text: $model.note)
+    VStack(alignment: .leading, spacing: 0) {
+      Header(model: model)
+        .padding(.bottom, 12)
+      switch model.phase {
+      case .idle:
+        if !model.fixRows.isEmpty {
+          SetupCard(model: model)
+            .padding(.bottom, 12)
+            .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
         }
-        .padding(.horizontal, 6)
-        Divider()
-        VStack(alignment: .leading, spacing: 10) {
-          HStack(spacing: 8) {
-            Text(L("Siren volume")).font(.system(size: 13))
-            Spacer(minLength: 8)
-            Slider(value: Binding(get: { model.volume }, set: { model.volume = ($0 / 5).rounded() * 5 }), in: 10...100)
-              .controlSize(.small)
-              .tint(amberDeep)
-              .frame(width: 118)
-            Text("\(Int(model.volume))%").font(.system(size: 12)).monospacedDigit().foregroundStyle(.secondary).frame(width: 34, alignment: .trailing)
-          }
-          Switch(title: L("Test mode"), sub: L("Next run stays silent, then turns itself off"), on: $model.testMode)
-          Switch(title: L("Frosted screen"), sub: L("Shows the notice on every screen while guarding"), on: $model.veil)
-        }
-        .padding(.horizontal, 6)
-        VStack(spacing: 0) {
-          Row(title: L("Phone alerts"), value: model.pushOn ? L("On") : L("Off")) { model.page = .push }
-          Row(title: L("Phone page"), value: L("After an alarm only")) { model.page = .live }
-          Row(title: L("Recordings"), value: L("Only around alarms · %ld", model.clips)) { model.openRecordings() }
-        }
-        if !model.recent.isEmpty {
-          Divider()
-          recent
-        }
-        Divider()
-        HStack {
-          Button(L("How it works")) { model.page = .intro }
-          Spacer()
-          Button(L("Quit BRB")) { NSApp.terminate(nil) }
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .font(.system(size: 12))
-        .padding(.horizontal, 6)
-      } else {
-        guarding
+        Hero(model: model)
+        PlacePicker(selection: $model.place)
+          .padding(.top, 14)
+        PlaceHint(place: model.place)
+          .padding(.top, 7)
+          .padding(.horizontal, 2)
+        NoteField(model: model)
+          .padding(.top, 6)
+        Caps(model: model)
+          .padding(.top, 14)
+        Recent(model: model)
+      case .arming:
+        MiniCountdown(model: model)
+      case .armed, .triggered:
+        Text(L("Rest a finger on Touch ID, or unlock the Mac, to stop"))
+          .font(Theme.caption)
+          .foregroundStyle(.secondary)
       }
     }
   }
+}
 
-  private var header: some View {
-    HStack(spacing: 10) {
-      ZStack {
-        Circle().fill(LinearGradient(colors: [Color(red: 0x2B / 255, green: 0x3A / 255, blue: 0x6B / 255), Color(red: 0x13 / 255, green: 0x1A / 255, blue: 0x33 / 255)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-        Circle().strokeBorder(.white.opacity(0.22), lineWidth: 0.5)
-        ShieldGlyph(look: glyph).frame(width: 20, height: 20)
-      }
-      .frame(width: 36, height: 36)
-      VStack(alignment: .leading, spacing: 1) {
-        Text("BRB").font(.system(size: 14.5, weight: .semibold))
-        Text(subtitle).font(.system(size: 12)).foregroundStyle(.secondary)
+/// The tile, the name, one status chip and the ⋯ menu (audit A3).
+private struct Header: View {
+  @ObservedObject var model: PanelModel
+  var title = "BRB"
+  var showsStatus = true
+
+  var body: some View {
+    HStack(spacing: 9) {
+      PanelTile(model: model)
+      Text(verbatim: title)
+        .font(.system(size: 13, weight: .semibold))
+      if showsStatus {
+        StatusChip(tone: tone, text: chip)
       }
       Spacer(minLength: 6)
-      if model.phase == .idle && !model.checks.isEmpty {
-        Button { if !model.ready { model.page = .notReady } } label: {
-          HStack(spacing: 6) {
-            Circle().fill(model.ready ? green : amberDeep).frame(width: 8, height: 8)
-            Text(model.ready ? L("Ready") : L("Not ready")).font(.system(size: 11.5)).foregroundStyle(.secondary)
-          }
-          .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+      if showsStatus && model.phase == .idle {
+        MoreButton(model: model)
       }
     }
-    .padding(.horizontal, 4)
+    .frame(height: 28)
   }
 
-  private var glyph: ShieldGlyph.Look {
+  private var tone: StatusChip.Tone {
     switch model.phase {
-    case .triggered: .alarm
-    case .idle: model.ready ? .guarding : .outline
-    default: .guarding
+    case .arming, .armed: return .warn
+    case .triggered: return .alarm
+    case .idle: return model.checks.isEmpty ? .busy : model.locked ? .warn : .ok
     }
   }
 
-  private var subtitle: String {
+  private var chip: String {
     switch model.phase {
-    case .idle:
-      if model.checks.isEmpty { return L("Checking…") }
-      if model.ready { return L("Ready · %ld checks passed", model.checks.filter { $0.shown && $0.ok }.count) }
-      return model.toFix == 1 ? L("1 thing to fix") : L("%ld things to fix", model.toFix)
     case .arming: return L("Starting…")
     case .armed: return L("Guarding")
     case .triggered: return L("Alarm raised")
+    case .idle:
+      if model.checks.isEmpty { return L("Checking…") }
+      if model.locked { return model.toFix == 1 ? L("1 thing to fix") : L("%ld things to fix", model.toFix) }
+      return L("Ready")
     }
   }
+}
 
-  private var armButton: some View {
-    Button(action: model.arm) {
-      VStack(spacing: 1) {
-        Text(L("Start guarding")).font(.system(size: 16, weight: .semibold))
-        Text(model.ready ? L("Starts in 5 s · leave it lying still") : L("See what's missing first"))
-          .font(.system(size: 11.5))
-          .opacity(0.72)
+/// The panel's tile looks like the menu bar (audit A4): an outline while idle, amber rising while
+/// counting down, amber with the watch light while guarding, red on an alarm.
+private struct PanelTile: View {
+  @ObservedObject var model: PanelModel
+
+  var body: some View {
+    if model.phase == .arming {
+      TimelineView(.animation) { tl in
+        Tile(look: .arming(tl.date.timeIntervalSince(model.countdownFrom) / GuardApp.countdownSeconds))
       }
-      .foregroundStyle(model.ready ? ink : Color.secondary)
-      .frame(maxWidth: .infinity)
-      .frame(height: 56)
+    } else {
+      Tile(look: model.phase == .armed ? .guarding : model.phase == .triggered ? .alarm : .outline)
+    }
+  }
+}
+
+private struct StatusChip: View {
+  enum Tone: Equatable { case ok, warn, alarm, busy }
+  let tone: Tone
+  let text: String
+  @State private var pop: CGFloat = 1
+
+  var body: some View {
+    HStack(spacing: 6) {
+      dot
+        .frame(width: 8, height: 8)
+        .scaleEffect(pop)
+      Text(text)
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .contentTransition(.opacity)
+    }
+    .padding(.leading, 7)
+    .padding(.trailing, 8)
+    .frame(height: 20)
+    .background(Capsule().fill(Theme.fill))
+    .animation(.easeInOut(duration: 0.3), value: text)
+    .animation(.easeInOut(duration: 0.3), value: tone)
+    .onChange(of: tone) { old, new in
+      guard old != new, new != .busy else { return }
+      replay(.spring(response: 0.42, dampingFraction: 0.4)) { pop = $0 ? 1 : 0.2 }
+    }
+    .accessibilityElement(children: .combine)
+  }
+
+  @ViewBuilder private var dot: some View {
+    switch tone {
+    case .busy: Spinner()
+    case .ok: Dot(color: Theme.green)
+    case .warn: Dot(color: Theme.amberDeep)
+    case .alarm: Dot(color: Theme.red, halo: false)
+    }
+  }
+}
+
+private struct Dot: View {
+  let color: Color
+  var halo = true
+
+  var body: some View {
+    Circle()
+      .fill(color)
+      .frame(width: 6, height: 6)
       .background {
-        if model.ready {
-          Capsule()
-            .fill(LinearGradient(colors: [Color(red: 1, green: 0xCF / 255, blue: 0x6B / 255), amberDeep], startPoint: .top, endPoint: .bottom))
-            .overlay(Capsule().strokeBorder(LinearGradient(colors: [.white.opacity(0.7), .white.opacity(0)], startPoint: .top, endPoint: .center), lineWidth: 1))
-            .shadow(color: Color(red: 220 / 255, green: 140 / 255, blue: 20 / 255).opacity(0.35), radius: 8, y: 6)
-        } else {
-          Capsule().fill(Color.primary.opacity(0.055))
-        }
+        if halo { Circle().fill(color.opacity(0.22)).frame(width: 11, height: 11) }
       }
-      .contentShape(Capsule())
-    }
-    .buttonStyle(Pressable())
-  }
-
-  private var placeHint: String {
-    switch model.place {
-    case .library: L("Quiet table: a firm nudge or a lift sounds the alarm")
-    case .cafe: L("Busy table: bumps are ignored, carrying it is not")
-    case .transit: L("Moving vehicle: only tilt, the lid, the charger and touch count")
-    }
-  }
-
-  private var recent: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text(L("Recent")).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(.tertiary)
-      ForEach(Array(model.recent.prefix(3).enumerated()), id: \.offset) { _, s in
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-          Text(Clock.when(s.armed))
-            .font(.system(size: 11.5, weight: .medium))
-            .monospacedDigit()
-            .foregroundStyle(.tertiary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .frame(width: 108, alignment: .leading)
-          Text(s.line)
-            .font(.system(size: 12.5))
-            .foregroundStyle(s.trigger == nil ? Color.primary : warn)
-            .lineLimit(2)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-      }
-    }
-    .padding(.horizontal, 6)
-  }
-
-  private var guarding: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text(model.phase == .triggered ? L("Alarm raised") : L("This Mac is guarded"))
-        .font(.system(size: 15, weight: .semibold))
-      Text(L("Rest a finger on Touch ID, or unlock the Mac, to stop"))
-        .font(.system(size: 12))
-        .foregroundStyle(.secondary)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(12)
-    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(amber.opacity(0.14)))
   }
 }
 
-/// Library, café, on the go: design A's capsule switcher, a white knob on a quiet well.
-private struct PlacePicker: View {
-  @Binding var selection: Place
+private struct Spinner: View {
+  @State private var turned = false
 
   var body: some View {
-    HStack(spacing: 0) {
-      ForEach(Place.allCases, id: \.self) { place in
-        Button { selection = place } label: {
-          Text(place.title)
-            .font(.system(size: 12.5, weight: place == selection ? .semibold : .regular))
-            .foregroundStyle(place == selection ? Color(red: 0x12 / 255, green: 0x18 / 255, blue: 0x26 / 255) : Color.primary)
-            .padding(.horizontal, 11)
-            .frame(height: 24)
-            .background {
-              if place == selection {
-                Capsule().fill(Color.white).shadow(color: .black.opacity(0.14), radius: 1.5, y: 1)
-              }
-            }
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(place == selection ? .isSelected : [])
+    Circle()
+      .trim(from: 0, to: 0.72)
+      .stroke(Color.secondary, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+      .frame(width: 8, height: 8)
+      .rotationEffect(.degrees(turned ? 360 : 0))
+      .onAppear {
+        withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) { turned = true }
       }
-    }
-    .padding(2)
-    .background(Capsule().fill(Color.primary.opacity(0.055)))
-    .animation(.easeOut(duration: 0.15), value: selection)
-    .fixedSize()
   }
 }
 
-private struct NoteField: View {
-  @Binding var text: String
-  @FocusState private var focused: Bool
-
-  var body: some View {
-    TextField("", text: $text, prompt: Text(L("Note on the screen, e.g. Back in 10 min")))
-      .textFieldStyle(.plain)
-      .font(.system(size: 13))
-      .focused($focused)
-      .padding(.horizontal, 10)
-      .frame(height: 32)
-      .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.055)))
-      .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(amberDeep, lineWidth: 2).opacity(focused ? 1 : 0))
+/// Jumps to the start at once, then animates to the end: a one-shot pop or sweep. `set(false)` is
+/// the start, `set(true)` the end.
+func replay(_ animation: Animation, _ set: @escaping (Bool) -> Void) {
+  var t = Transaction()
+  t.disablesAnimations = true
+  withTransaction(t) { set(false) }
+  DispatchQueue.main.async {
+    withAnimation(animation) { set(true) }
   }
 }
 
-private struct Pressable: ButtonStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .scaleEffect(configuration.isPressed ? 0.97 : 1)
-      .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
-  }
-}
-
-/// Three cards on first launch: what it does, what it records, how to stop it. The last one offers a
-/// silent first run, so the first alarm anyone hears is never a surprise.
-private struct IntroPage: View {
+/// ⋯: Settings, how it works, the recordings, quit. A native menu, with its shortcuts.
+private struct MoreButton: View {
   @ObservedObject var model: PanelModel
-  private var step: Int { model.introStep }
-
-  private struct Card {
-    let look: ShieldGlyph.Look
-    let title: String
-    let text: String
-  }
-
-  private var cards: [Card] {
-    [
-      Card(look: .guarding, title: L("Start it before you step away"),
-           text: L("Every screen frosts over and asks people not to touch. Lifting, tilting or closing the Mac, a key or a click sounds the alarm.")),
-      Card(look: .alarm, title: L("Walking by isn't recorded"),
-           text: L("The camera keeps only the last 10 seconds, in memory. They are saved, with the faces behind the person blurred, only when someone touches the Mac.")),
-      Card(look: .clear, title: L("Back? Rest a finger on Touch ID"),
-           text: L("Touch ID or unlocking the Mac stops it. Try it once in test mode first: nothing makes a sound.")),
-    ]
-  }
+  @State private var hover = false
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      HStack {
-        Text(L("Welcome to BRB")).font(.system(size: 14.5, weight: .semibold))
-        Spacer()
-        Text(L("%ld of %ld", step + 1, cards.count)).font(.system(size: 11.5)).monospacedDigit().foregroundStyle(.secondary)
-      }
-      .padding(.horizontal, 4)
-      HStack(alignment: .top, spacing: 14) {
-        ZStack {
-          Circle().fill(LinearGradient(colors: [Color(red: 0x2B / 255, green: 0x3A / 255, blue: 0x6B / 255), Color(red: 0x13 / 255, green: 0x1A / 255, blue: 0x33 / 255)],
-                                       startPoint: .topLeading, endPoint: .bottomTrailing))
-          ShieldGlyph(look: cards[step].look).frame(width: 30, height: 30)
-        }
-        .frame(width: 56, height: 56)
-        VStack(alignment: .leading, spacing: 5) {
-          Text(cards[step].title).font(.system(size: 15, weight: .semibold)).fixedSize(horizontal: false, vertical: true)
-          Text(cards[step].text).font(.system(size: 12.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        }
-      }
-      .padding(14)
-      .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
-      .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.primary.opacity(0.045)))
-      .id(step)
-      .transition(.opacity)
-      HStack(spacing: 6) {
-        ForEach(0..<cards.count, id: \.self) { i in
-          Capsule().fill(i == step ? amberDeep : Color.primary.opacity(0.15)).frame(width: i == step ? 16 : 6, height: 6)
-        }
-      }
-      .frame(maxWidth: .infinity)
-      .animation(.easeOut(duration: 0.2), value: step)
-      HStack {
-        Button(step == 0 ? L("Skip") : L("Back")) {
-          if step == 0 { model.finishIntro(tryIt: false) } else { withAnimation(.easeOut(duration: 0.2)) { model.introStep -= 1 } }
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
-        .font(.system(size: 12.5))
-        Spacer()
-        Button {
-          if step < cards.count - 1 { withAnimation(.easeOut(duration: 0.2)) { model.introStep += 1 } } else { model.finishIntro(tryIt: true) }
-        } label: {
-          Text(step < cards.count - 1 ? L("Next") : L("Try a silent run"))
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(ink)
-            .padding(.horizontal, 16)
-            .frame(height: 32)
-            .background(Capsule().fill(LinearGradient(colors: [Color(red: 1, green: 0xCF / 255, blue: 0x6B / 255), amberDeep], startPoint: .top, endPoint: .bottom)))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(Pressable())
-        .keyboardShortcut(.defaultAction)
-      }
-      .padding(.horizontal, 4)
-      if step == cards.count - 1 {
-        Text(L("BRB asks for Accessibility and the camera on the way."))
-          .font(.system(size: 11))
+    Button(action: show) {
+      Image(systemName: "ellipsis")
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(hover ? Color.primary : Color.secondary)
+        .frame(width: 26, height: 26)
+        .background(Circle().fill(hover ? Theme.fill : Color.clear))
+        .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .onHover { hover = $0 }
+    .help(L("More"))
+    .accessibilityLabel(L("More"))
+  }
+
+  private func show() {
+    let menu = NSMenu()
+    func item(_ title: String, _ key: String = "", _ run: @escaping () -> Void) {
+      let action = MenuAction(run)
+      let i = NSMenuItem(title: title, action: #selector(MenuAction.fire), keyEquivalent: key)
+      i.target = action
+      i.representedObject = action  // the item keeps its action alive
+      menu.addItem(i)
+    }
+    item(L("Settings…"), ",") { model.onSettings(.general) }
+    item(L("How it works")) { model.showIntro() }
+    item(L("Open Recordings Folder")) { model.reveal(nil) }
+    menu.addItem(.separator())
+    item(L("Quit BRB"), "q") { NSApp.terminate(nil) }
+    menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+  }
+}
+
+final class MenuAction: NSObject {
+  let run: () -> Void
+  init(_ run: @escaping () -> Void) { self.run = run }
+  @objc func fire() { run() }
+}
+
+/// "Before guarding": only what is missing, each with the button that fixes it.
+private struct SetupCard: View {
+  @ObservedObject var model: PanelModel
+  @State private var flash = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(alignment: .firstTextBaseline) {
+        Text(L("Before guarding"))
+          .font(.system(size: 12, weight: .semibold))
+        Spacer(minLength: 8)
+        Text(verbatim: "\(model.setupDone) / \(model.setupTotal)")
+          .font(.system(size: 12, weight: .medium))
+          .monospacedDigit()
           .foregroundStyle(.tertiary)
-          .padding(.horizontal, 4)
+          .contentTransition(.numericText())
+          .animation(.default, value: model.setupDone)
+      }
+      .padding(EdgeInsets(top: 10, leading: 12, bottom: 2, trailing: 12))
+      ForEach(Array(model.fixRows.enumerated()), id: \.element.id) { i, check in
+        FixRow(check: check, divider: i > 0, busy: model.installing && check.id == .sleep) { model.fix(check) }
+          .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+      }
+    }
+    .background(LinearGradient(colors: [Theme.amber.opacity(0.11), Theme.amber.opacity(0.05)], startPoint: .top, endPoint: .bottom))
+    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.amber.opacity(flash ? 0.95 : 0.38), lineWidth: flash ? 1.5 : 0.5))
+    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.amber.opacity(flash ? 0.18 : 0), lineWidth: 4).padding(-4))
+    .onChange(of: model.lockedNudge) { _, _ in
+      withAnimation(.easeOut(duration: 0.2)) { flash = true }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        withAnimation(.easeInOut(duration: 0.45)) { flash = false }
       }
     }
   }
 }
 
-private struct NotReadyPage: View {
-  @ObservedObject var model: PanelModel
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Back(title: L("Before guarding")) { model.page = .main }
-      Text(L("Guarding starts once everything marked below is fixed."))
-        .font(.system(size: 12))
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-      VStack(spacing: 0) {
-        ForEach(model.checks.filter(\.shown)) { check in
-          CheckRow(check: check, busy: model.installing && check.id == .sleep) { model.fix(check) }
-          if check.id != model.checks.filter(\.shown).last?.id { Divider().padding(.leading, 30) }
-        }
-      }
-      HStack {
-        Button(L("Check again")) { model.refreshChecks() }
-        Spacer()
-        Button(L("Start guarding")) { model.arm() }
-          .disabled(!model.ready)
-      }
-      .controlSize(.small)
-    }
-  }
-}
-
-private struct CheckRow: View {
+private struct FixRow: View {
   let check: Check
+  let divider: Bool
   let busy: Bool
   let fix: () -> Void
 
   var body: some View {
-    HStack(alignment: .top, spacing: 10) {
-      Image(systemName: check.ok ? "checkmark.circle.fill" : check.optional ? "circle.dashed" : "exclamationmark.circle.fill")
-        .foregroundStyle(check.ok ? green : check.optional ? Color.secondary : amber)
-        .font(.system(size: 15))
-        .frame(width: 20)
-      VStack(alignment: .leading, spacing: 2) {
-        HStack(spacing: 6) {
-          Text(check.title).font(.system(size: 12.5, weight: .medium))
-          if check.optional { Text(L("optional")).font(.system(size: 10.5)).foregroundStyle(.tertiary) }
-        }
-        Text(check.detail).font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    HStack(spacing: 9) {
+      ZStack {
+        Image(systemName: "exclamationmark.circle.fill")
+          .symbolRenderingMode(.palette)
+          .foregroundStyle(Theme.ink, Theme.amberDeep)
+          .scaleEffect(check.ok ? 0.3 : 1)
+          .opacity(check.ok ? 0 : 1)
+        Image(systemName: "checkmark.circle.fill")
+          .symbolRenderingMode(.palette)
+          .foregroundStyle(Color.white, Theme.green)
+          .scaleEffect(check.ok ? 1 : 0.3)
+          .opacity(check.ok ? 1 : 0)
       }
-      Spacer(minLength: 6)
-      if let label = fixLabel {
-        Button(label, action: fix).controlSize(.small).disabled(busy)
-      }
-    }
-    .padding(.vertical, 8)
-  }
-
-  private var fixLabel: String? {
-    guard !check.ok else { return nil }
-    switch check.id {
-    case .accessibility: return L("Open Settings")
-    case .camera: return check.optional ? nil : check.askable ? L("Allow") : L("Open Settings")
-    case .sleep: return busy ? L("Installing…") : L("Install")
-    case .push: return L("Set up")
-    default: return nil
-    }
-  }
-}
-
-private struct PushPage: View {
-  @ObservedObject var model: PanelModel
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Back(title: L("Phone alerts")) { model.page = .main }
-      Switch(title: L("Send alerts to my phone"), sub: L("An alarm sends what happened and a photo"), on: $model.pushOn)
-      if model.pushOn {
-        HStack(alignment: .top, spacing: 14) {
-          QRView(text: "https://ntfy.sh/" + Push.topic)
-          VStack(alignment: .leading, spacing: 7) {
-            Step(n: 1, text: L("Install the free ntfy app"))
-            Step(n: 2, text: L("Scan this code, or paste the topic under + in ntfy"))
-            Step(n: 3, text: L("Send a test below"))
-          }
-        }
-        HStack {
-          Button(model.copied == "topic" ? L("Copied") : L("Copy topic")) { model.copy(Push.topic, as: "topic") }
-          Spacer()
-          if model.sending {
-            ProgressView().controlSize(.small)
-          } else if let ok = model.testPush {
-            Text(ok ? L("Sent. Check your phone.") : L("Couldn't send. Check the network."))
-              .font(.system(size: 11.5))
-              .foregroundStyle(ok ? green : amber)
-          }
-          Button(L("Send a test"), action: model.sendTestPush).disabled(model.sending)
-        }
-        .controlSize(.small)
-        Text(L("Alerts go through ntfy.sh. The topic name is the only key, and photos are kept there for 3 hours."))
-          .font(.system(size: 11))
+      .font(.system(size: 16))
+      .frame(width: 18, height: 18)
+      .animation(.spring(response: 0.35, dampingFraction: 0.55), value: check.ok)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(check.title)
+          .font(.system(size: 13, weight: .medium))
+        Text(check.detail)
+          .font(Theme.label)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
+          .id(check.detail)
+          .transition(.opacity)
       }
+      .animation(.easeInOut(duration: 0.25), value: check.detail)
+      Spacer(minLength: 6)
+      Button(action: fix) {
+        HStack(spacing: 5) {
+          if busy { ProgressView().controlSize(.mini) }
+          Text(label)
+        }
+      }
+      .controlSize(.small)
+      .disabled(busy || check.ok)
+      .opacity(check.ok ? 0 : 1)
+      .animation(.easeOut(duration: 0.2), value: check.ok)
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+    .overlay(alignment: .top) {
+      if divider { Rectangle().fill(Theme.separator).frame(height: 0.5).padding(.horizontal, 12) }
+    }
+  }
+
+  private var label: String {
+    switch check.id {
+    case .accessibility: L("Open Settings")
+    case .camera: check.askable ? L("Allow") : L("Open Settings")
+    case .sleep: busy ? L("Installing…") : L("Install")
+    case .push: L("Set up")
+    default: L("Check again")
     }
   }
 }
 
-private struct LivePage: View {
+/// The start button: amber and ready, striped for a silent run, or a quiet well with a lock while
+/// something is missing. ↩ presses it from anywhere in the panel (audit B5, B6).
+private struct Hero: View {
+  @ObservedObject var model: PanelModel
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @FocusState private var focused: Bool
+  @State private var hover = false
+  @State private var shine = false
+  @State private var badgeScale: CGFloat = 1
+
+  var body: some View {
+    let locked = model.locked
+    let silent = (model.testMode || model.optionHeld) && !locked
+    let lift = hover && !locked
+    Button(action: model.arm) {
+      HStack(spacing: 12) {
+        badge(locked, lift: lift)
+        words(locked, silent)
+        Keycap { Text(verbatim: "↩").font(.system(size: 12, weight: .semibold)) }
+          .opacity(locked ? 0 : 1)
+      }
+      .padding(.horizontal, 12)
+      .frame(maxWidth: .infinity)
+      .frame(height: 64)
+      .foregroundStyle(locked ? Color.secondary : Theme.ink)
+      .background(HeroGround(locked: locked, silent: silent, hover: hover))
+      .overlay(sweep)
+      .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+      .brightness(lift ? 0.03 : 0)
+      .saturation(lift ? 1.06 : 1)
+    }
+    .buttonStyle(HeroPress())
+    .keyboardShortcut(.defaultAction)
+    .focusEffectDisabled()
+    .focused($focused)
+    .shadow(color: Color(red: 220 / 255, green: 140 / 255, blue: 20 / 255).opacity(locked ? 0 : lift ? 0.38 : 0.3), radius: lift ? 12 : 8, y: lift ? 9 : 6)
+    .overlay(RoundedRectangle(cornerRadius: 19, style: .continuous).strokeBorder(Theme.amber.opacity(0.8), lineWidth: 2.5).padding(-4).opacity(focused ? 1 : 0))
+    .modifier(Shake(model.lockedNudge))
+    .animation(.timingCurve(0.36, 0.07, 0.19, 0.97, duration: 0.42), value: model.lockedNudge)
+    .animation(.easeInOut(duration: 0.35), value: locked)
+    .animation(.easeInOut(duration: 0.3), value: silent)
+    .animation(.easeOut(duration: 0.2), value: hover)
+    .onHover { hover = $0 }
+    .help(locked || model.testMode ? "" : L("Hold ⌥ for a silent run"))
+    .onChange(of: model.bloom) { _, _ in bloom() }
+  }
+
+  private func badge(_ locked: Bool, lift: Bool) -> some View {
+    ZStack {
+      RoundedRectangle(cornerRadius: 12, style: .continuous)
+        .fill(locked ? Theme.fill : Theme.ink.opacity(0.1))
+      if locked {
+        Image(systemName: "lock")
+          .font(.system(size: 17, weight: .medium))
+          .transition(.scale(scale: 0.6).combined(with: .opacity))
+      } else {
+        ShieldGlyph(look: .ink)
+          .frame(width: 22, height: 22)
+          .transition(.scale(scale: 0.6).combined(with: .opacity))
+      }
+    }
+    .frame(width: 40, height: 40)
+    .scaleEffect(badgeScale * (lift ? 1.04 : 1))
+    .offset(y: lift ? -1 : 0)
+    .animation(.spring(response: 0.35, dampingFraction: 0.6), value: lift)
+  }
+
+  private func words(_ locked: Bool, _ silent: Bool) -> some View {
+    let label = silent ? L("Try a silent run") : L("Start guarding")
+    let sub = locked ? (model.toFix == 1 ? L("Fix the 1 above first") : L("Fix the %ld above first", model.toFix))
+      : !silent ? L("Starts in 5 s · leave it lying still")
+      : model.testMode ? L("This run stays silent, then test mode turns off") : L("This run stays silent")
+    return ZStack(alignment: .leading) {
+      VStack(alignment: .leading, spacing: 1) {
+        Text(label)
+          .font(.system(size: 15, weight: .semibold))
+          .lineLimit(1)
+        Text(sub)
+          .font(.system(size: 11, weight: .medium))
+          .opacity(0.74)
+          .lineLimit(2)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .id(label + sub)
+      .transition(.words())
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .animation(Theme.out(0.3), value: label + sub)
+  }
+
+  /// Light crossing the button once the last missing piece is fixed.
+  private var sweep: some View {
+    GeometryReader { g in
+      LinearGradient(stops: [.init(color: .clear, location: 0.3), .init(color: .white.opacity(0.55), location: 0.48),
+                             .init(color: .white.opacity(0.1), location: 0.56), .init(color: .clear, location: 0.7)],
+                     startPoint: UnitPoint(x: 0, y: 0.4), endPoint: UnitPoint(x: 1, y: 0.6))
+        .frame(width: g.size.width, height: g.size.height)
+        .offset(x: shine ? g.size.width * 1.1 : -g.size.width * 1.1)
+    }
+    .allowsHitTesting(false)
+  }
+
+  private func bloom() {
+    guard !reduceMotion else { return }
+    replay(Theme.out(0.9).delay(0.1)) { shine = $0 }
+    replay(.spring(response: 0.4, dampingFraction: 0.4)) { badgeScale = $0 ? 1 : 0.8 }
+  }
+}
+
+private struct HeroGround: View {
+  let locked: Bool
+  let silent: Bool
+  let hover: Bool
+
+  var body: some View {
+    ZStack {
+      RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Theme.fill)
+      RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.separator, lineWidth: 0.5)
+      ZStack {
+        LinearGradient(colors: [Theme.amberHi, Theme.amberDeep], startPoint: .top, endPoint: .bottom)
+        if silent {
+          // The test-mode switch's stripes; they march while the pointer is on the button.
+          TimelineView(.animation(minimumInterval: nil, paused: !hover)) { tl in
+            Stripes(band: 7, offset: hover ? -CGFloat(tl.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.6) / 1.6 * 40) : 0)
+          }
+          .background(Theme.amberDeep)
+          .transition(.opacity)
+        }
+        VStack(spacing: 0) {
+          Color.white.opacity(0.6).frame(height: 1)
+          Spacer(minLength: 0)
+          Color(red: 140 / 255, green: 70 / 255, blue: 0).opacity(0.22).frame(height: 1)
+        }
+      }
+      .opacity(locked ? 0 : 1)
+    }
+  }
+}
+
+private struct HeroPress: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .scaleEffect(configuration.isPressed ? 0.975 : 1)
+      .animation(.spring(response: 0.26, dampingFraction: 0.6), value: configuration.isPressed)
+  }
+}
+
+struct Pressable: ButtonStyle {
+  var scale: CGFloat = 0.97
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .scaleEffect(configuration.isPressed ? scale : 1)
+      .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+  }
+}
+
+/// Library, café, on the go: three equal parts and one knob that slides (audit B1).
+private struct PlacePicker: View {
+  @Binding var selection: Place
+  @Namespace private var knob
+
+  var body: some View {
+    HStack(spacing: 0) {
+      ForEach(Place.allCases, id: \.self) { place in
+        let on = place == selection
+        Button {
+          selection = place
+        } label: {
+          HStack(spacing: 6) {
+            Image(systemName: place.symbol)
+              .font(.system(size: 12.5))
+              .scaleEffect(on ? 1.06 : 1)
+            Text(place.title)
+              .font(.system(size: 12.5, weight: .medium))
+              .lineLimit(1)
+              .minimumScaleFactor(0.85)
+          }
+          .foregroundStyle(on ? Theme.knobText : Color.secondary)
+          .padding(.horizontal, 4)
+          .frame(maxWidth: .infinity)
+          .frame(height: 28)
+          .background {
+            if on {
+              RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Theme.knob)
+                .shadow(color: .black.opacity(0.2), radius: 1.25, y: 1)
+                .matchedGeometryEffect(id: "knob", in: knob)
+            }
+          }
+          .contentShape(Rectangle())
+        }
+        .buttonStyle(Pressable(scale: 0.96))
+        .accessibilityAddTraits(on ? .isSelected : [])
+      }
+    }
+    .padding(2)
+    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Theme.fill))
+    .animation(Theme.slide, value: selection)
+  }
+}
+
+/// What counts at this place. All three lines are laid out, so the panel keeps its height.
+private struct PlaceHint: View {
+  let place: Place
+
+  var body: some View {
+    ZStack(alignment: .topLeading) {
+      ForEach(Place.allCases, id: \.self) { p in
+        let on = p == place
+        Text(p.hint)
+          .font(Theme.caption)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .opacity(on ? 1 : 0)
+          .offset(y: on ? 0 : 5)
+          .blur(radius: on ? 0 : 2)
+          .accessibilityHidden(!on)
+      }
+    }
+    .animation(Theme.out(0.35), value: place)
+  }
+}
+
+/// The note on the notice: counts from 16 characters, shakes at the limit, clears with one click,
+/// and ↩ starts guarding (audit B2).
+private struct NoteField: View {
+  @ObservedObject var model: PanelModel
+  @FocusState private var focused: Bool
+
+  var body: some View {
+    let n = model.note.count
+    HStack(spacing: 8) {
+      Image(systemName: "text.bubble")
+        .font(.system(size: 13))
+        .foregroundStyle(.tertiary)
+      TextField("", text: $model.note, prompt: Text(L("Note on the screen, e.g. Back in 10 min")))
+        .textFieldStyle(.plain)
+        .font(Theme.body)
+        .focused($focused)
+        .onSubmit(model.arm)
+      Text(verbatim: "\(n)/\(Prefs.noteLimit)")
+        .font(.system(size: 11, weight: .medium, design: .rounded))
+        .monospacedDigit()
+        .foregroundStyle(n >= Prefs.noteLimit ? Theme.warn : Color.secondary)
+        .opacity(n >= 16 ? 1 : 0)
+        .animation(.easeOut(duration: 0.2), value: n >= 16)
+      Button {
+        model.note = ""
+        focused = true
+      } label: {
+        Image(systemName: "xmark.circle.fill")
+          .font(.system(size: 13))
+          .foregroundStyle(.tertiary)
+      }
+      .buttonStyle(.plain)
+      .opacity(n > 0 ? 1 : 0)
+      .scaleEffect(n > 0 ? 1 : 0.6)
+      .allowsHitTesting(n > 0)
+      .animation(.spring(response: 0.25, dampingFraction: 0.6), value: n > 0)
+      .help(L("Clear"))
+      .accessibilityLabel(L("Clear"))
+    }
+    .padding(.leading, 10)
+    .padding(.trailing, 8)
+    .frame(height: 34)
+    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(focused ? Color.primary.opacity(0.04) : Theme.fill))
+    .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Theme.amberDeep.opacity(0.9), lineWidth: 1).opacity(focused ? 1 : 0))
+    .overlay(RoundedRectangle(cornerRadius: 12.5, style: .continuous).strokeBorder(Theme.amber.opacity(0.32), lineWidth: 3.5).padding(-3.5).opacity(focused ? 1 : 0))
+    .animation(.easeOut(duration: 0.18), value: focused)
+    .modifier(Shake(model.noteBump, amount: 5))
+    .animation(.linear(duration: 0.32), value: model.noteBump)
+  }
+}
+
+/// What is on, at a glance: the camera, the phone, staying awake with the lid shut, Touch ID. Each
+/// opens its place in Settings.
+private struct Caps: View {
   @ObservedObject var model: PanelModel
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Back(title: L("Phone page")) { model.page = .main }
-      HStack(alignment: .top, spacing: 14) {
-        QRView(text: model.liveLink)
-        VStack(alignment: .leading, spacing: 7) {
-          Text(L("Open this on your phone and keep it.")).font(.system(size: 12.5, weight: .medium))
-          Text(L("Before an alarm it only shows whether this Mac is guarded. After one it shows the camera, the photos and what happened."))
-            .font(.system(size: 11.5))
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-      }
-      Text(L("The page can only watch. It can't control this Mac."))
-        .font(.system(size: 11.5))
-        .foregroundStyle(.secondary)
-      HStack {
-        Button(model.copied == "link" ? L("Copied") : L("Copy link")) { model.copy(model.liveLink, as: "link") }
-        Spacer()
-        Button(model.confirmReset ? L("Tap again: the old link stops working") : L("Reset link"), action: model.resetLink)
-          .foregroundStyle(model.confirmReset ? Color.red : Color.primary)
-      }
-      .controlSize(.small)
+    HStack(spacing: 6) {
+      CapTile(title: L("Camera"), symbol: "video", status: camera, help: model.check(.camera)?.detail) { model.onSettings(.recordings) }
+      CapTile(title: L("Phone"), symbol: "iphone", status: model.pushOn ? .on : .off, help: model.check(.push)?.detail) { model.onSettings(.phone) }
+      CapTile(title: L("Lid shut"), symbol: "laptopcomputer", status: lid, help: model.check(.sleep)?.detail) { model.onSettings(.checks) }
+      CapTile(title: L("Touch ID"), symbol: "touchid", status: model.check(.touchID)?.ok == true ? .on : .off,
+              help: model.check(.touchID)?.detail) { model.onSettings(.checks) }
     }
+  }
+
+  private var camera: CapTile.Status {
+    guard let c = model.check(.camera) else { return .off }
+    return c.ok ? .on : c.optional ? .off : .warn
+  }
+
+  private var lid: CapTile.Status {
+    guard let c = model.check(.sleep) else { return .off }
+    return c.ok ? .on : .warn
   }
 }
 
-private struct Row: View {
+private struct CapTile: View {
+  enum Status { case on, off, warn }
   let title: String
-  let value: String?
+  let symbol: String
+  let status: Status
+  let help: String?
   let action: () -> Void
   @State private var hover = false
 
   var body: some View {
     Button(action: action) {
-      HStack(spacing: 10) {
-        Text(title).font(.system(size: 13))
-        Spacer(minLength: 8)
-        if let value { Text(value).font(.system(size: 12.5)).foregroundStyle(.secondary).lineLimit(1) }
-        Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
+      VStack(spacing: 5) {
+        Image(systemName: symbol)
+          .font(.system(size: 16))
+          .foregroundStyle(.secondary)
+          .frame(height: 19)
+        Text(title)
+          .font(.system(size: 11, weight: .medium))
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
       }
-      .padding(.horizontal, 6)
-      .frame(height: 34)
-      .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(hover ? Color.primary.opacity(0.055) : .clear))
-      .contentShape(Rectangle())
+      .frame(maxWidth: .infinity)
+      .padding(.top, 9)
+      .padding(.bottom, 8)
+      .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(hover ? Theme.fill2 : Theme.fill))
+      .overlay(alignment: .topTrailing) {
+        Circle()
+          .fill(dot)
+          .frame(width: 6, height: 6)
+          .padding(.top, 7)
+          .padding(.trailing, 8)
+      }
+      .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
-    .buttonStyle(.plain)
+    .buttonStyle(Pressable(scale: 0.95))
     .onHover { hover = $0 }
+    .animation(.easeOut(duration: 0.12), value: hover)
+    .animation(.easeInOut(duration: 0.3), value: status)
+    .help(help ?? title)
+    .accessibilityLabel(title)
+    .accessibilityValue(help ?? "")
+  }
+
+  private var dot: Color {
+    switch status {
+    case .on: Theme.green
+    case .off: Color.secondary.opacity(0.5)
+    case .warn: Theme.amberDeep
+    }
   }
 }
 
-private struct Switch: View {
-  let title: String
-  let sub: String
-  @Binding var on: Bool
+/// The last three sessions, two while the setup card needs the room: what happened, when, and the
+/// recording one click away (audit A6, A7).
+private struct Recent: View {
+  @ObservedObject var model: PanelModel
 
   var body: some View {
-    Toggle(isOn: $on) {
-      VStack(alignment: .leading, spacing: 1) {
-        Text(title).font(.system(size: 13))
-        Text(sub).font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    let list = Array(model.history.prefix(model.fixRows.isEmpty ? 3 : 2))
+    if !list.isEmpty {
+      VStack(alignment: .leading, spacing: 0) {
+        Text(L("Recent"))
+          .font(.system(size: 11, weight: .semibold))
+          .foregroundStyle(.tertiary)
+          .padding(.horizontal, 4)
+          .padding(.top, 16)
+          .padding(.bottom, 4)
+        ForEach(list, id: \.armed) { s in
+          RecentRow(session: s, isNew: model.isNew(s)) { model.reveal(s.clip) }
+            .transition(.opacity.combined(with: .offset(y: -6)))
+        }
       }
     }
-    .toggleStyle(AmberSwitch())
   }
 }
 
-/// Design A's switch: the label on the left, the switch always at the trailing edge, amber stripes
-/// when on.
-private struct AmberSwitch: ToggleStyle {
-  func makeBody(configuration: Configuration) -> some View {
+private struct RecentRow: View {
+  let session: Session
+  let isNew: Bool
+  let reveal: () -> Void
+  @State private var hover = false
+
+  var body: some View {
+    if session.clip != nil {
+      Button(action: reveal) { row }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .help(L("Show in Finder"))
+    } else {
+      row
+    }
+  }
+
+  private var row: some View {
     HStack(spacing: 10) {
+      tile
+      VStack(alignment: .leading, spacing: 1) {
+        Text(session.title)
+          .font(Theme.body)
+          .foregroundStyle(session.alarmed ? Theme.warn : Color.primary)
+          .lineLimit(1)
+        Text(session.detail)
+          .font(Theme.label)
+          .monospacedDigit()
+          .foregroundStyle(.tertiary)
+          .lineLimit(1)
+      }
+      Spacer(minLength: 6)
+      if isNew {
+        Text(L("New"))
+          .font(.system(size: 10, weight: .semibold))
+          .foregroundStyle(.white)
+          .padding(.horizontal, 6)
+          .padding(.vertical, 3)
+          .background(Capsule().fill(Theme.red))
+      }
+      if session.clip != nil {
+        Image(systemName: "arrow.up.forward")
+          .font(.system(size: 11, weight: .semibold))
+          .foregroundStyle(.tertiary)
+          .opacity(hover ? 1 : 0)
+      }
+    }
+    .padding(.horizontal, 4)
+    .padding(.vertical, 5)
+    .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(hover ? Theme.fill : Color.clear))
+    .contentShape(Rectangle())
+    .animation(.easeOut(duration: 0.15), value: hover)
+  }
+
+  private var tile: some View {
+    let color = session.alarmed ? Theme.red : session.quiet ? Theme.green : Color.secondary
+    let symbol = session.alarmed ? "exclamationmark" : session.quiet ? "checkmark" : "minus"
+    return Image(systemName: symbol)
+      .font(.system(size: 12, weight: .bold))
+      .foregroundStyle(color)
+      .frame(width: 26, height: 26)
+      .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color.opacity(0.15)))
+  }
+}
+
+/// The countdown in the panel, when the frosted screen is off (audit A8).
+private struct MiniCountdown: View {
+  @ObservedObject var model: PanelModel
+
+  var body: some View {
+    HStack(spacing: 14) {
+      ZStack {
+        Circle().stroke(Color.secondary.opacity(0.25), lineWidth: 4)
+        TimelineView(.animation) { tl in
+          Circle()
+            .trim(from: 0, to: min(1, tl.date.timeIntervalSince(model.countdownFrom) / GuardApp.countdownSeconds))
+            .stroke(Theme.amberDeep, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+            .rotationEffect(.degrees(-90))
+        }
+        Text(verbatim: "\(model.remaining)")
+          .font(.system(size: 22, weight: .light, design: .rounded))
+          .monospacedDigit()
+          .contentTransition(.numericText(countsDown: true))
+          .animation(.default, value: model.remaining)
+      }
+      .frame(width: 48, height: 48)
+      .padding(4)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(L("Guarding starts in %ld s", model.remaining))
+          .font(Theme.title)
+        Text(L("esc cancels too"))
+          .font(Theme.caption)
+          .foregroundStyle(.secondary)
+      }
+      Spacer(minLength: 8)
+      Button(L("Cancel"), action: model.onCancel)
+        .controlSize(.small)
+    }
+  }
+}
+
+/// Three cards on first launch: what it does, what it records, how to stop it. Each has a small
+/// film of what it says; the cards slide the way you go, and the dots can be clicked (audit B7).
+/// The last offers a silent first run, so the first alarm anyone hears is never a surprise.
+private struct IntroPage: View {
+  @ObservedObject var model: PanelModel
+  private var step: Int { model.introStep }
+
+  private var cards: [(title: String, text: String)] {
+    [
+      (L("Start it before you step away"),
+       L("Every screen frosts over and asks people not to touch. Lifting, tilting or closing the Mac, a key or a click sounds the alarm.")),
+      (L("Walking by isn't recorded"),
+       L("The camera keeps only the last 10 seconds, in memory. They are saved, with the faces behind the person blurred, only when someone touches the Mac.")),
+      (L("Back? Rest a finger on Touch ID"),
+       L("Touch ID or unlocking the Mac stops it. Try it once in test mode first: nothing makes a sound.")),
+    ]
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      Header(model: model, title: L("Welcome to BRB"), showsStatus: false)
+        .padding(.bottom, 12)
+      ZStack(alignment: .topLeading) {
+        card(step)
+          .id(step)
+          .transition(.asymmetric(insertion: .offset(x: model.introForward ? 26 : -26).combined(with: .opacity),
+                                  removal: .offset(x: model.introForward ? -26 : 26).combined(with: .opacity)))
+      }
+      HStack(spacing: 8) {
+        dots
+        Spacer(minLength: 8)
+        Button(step == 0 ? L("Skip") : step == 2 ? L("Later") : L("Back")) {
+          if step == 1 { model.goIntro(0) } else { model.finishIntro(tryIt: false) }
+        }
+        .buttonStyle(QuietButton())
+        Button(step < 2 ? L("Next") : L("Try a silent run")) {
+          if step < 2 { model.goIntro(step + 1) } else { model.finishIntro(tryIt: true) }
+        }
+        .buttonStyle(AmberButton())
+        .keyboardShortcut(.defaultAction)
+      }
+      .padding(.top, 14)
+      if step == 2 {
+        Text(L("BRB asks for Accessibility and the camera on the way."))
+          .font(Theme.label)
+          .foregroundStyle(.tertiary)
+          .padding(.top, 10)
+          .padding(.horizontal, 2)
+          .transition(.opacity)
+      }
+    }
+  }
+
+  private func card(_ i: Int) -> some View {
+    VStack(alignment: .leading, spacing: 0) {
+      IntroFilm(step: i)
+        .frame(maxWidth: .infinity)
+        .frame(height: 150)
+        .background(Theme.tile)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.white.opacity(0.14), lineWidth: 0.5))
+      Text(cards[i].title)
+        .font(Theme.title)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.top, 14)
+        .padding(.bottom, 5)
+        .padding(.horizontal, 2)
+      Text(cards[i].text)
+        .font(Theme.caption)
+        .foregroundStyle(.secondary)
+        .lineSpacing(2)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, minHeight: 54, alignment: .topLeading)
+        .padding(.horizontal, 2)
+    }
+  }
+
+  private var dots: some View {
+    HStack(spacing: 6) {
+      ForEach(0..<3, id: \.self) { i in
+        Button {
+          model.goIntro(i)
+        } label: {
+          Capsule()
+            .fill(i == step ? Theme.amberDeep : Color.secondary.opacity(0.45))
+            .frame(width: i == step ? 18 : 6, height: 6)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(verbatim: "\(i + 1) / 3"))
+      }
+    }
+    .padding(.leading, 2)
+    .animation(.spring(response: 0.35, dampingFraction: 0.6), value: step)
+  }
+}
+
+/// A small amber push button: the intro's next step.
+struct AmberButton: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(.system(size: 12, weight: .semibold))
+      .foregroundStyle(Theme.ink)
+      .padding(.horizontal, 12)
+      .frame(height: 24)
+      .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+        .fill(LinearGradient(colors: [Theme.amberHi, Theme.amberDeep], startPoint: .top, endPoint: .bottom)))
+      .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+        .strokeBorder(LinearGradient(colors: [.white.opacity(0.55), .clear], startPoint: .top, endPoint: .center), lineWidth: 0.5))
+      .shadow(color: Color(red: 190 / 255, green: 110 / 255, blue: 0).opacity(0.3), radius: 1.5, y: 1)
+      .scaleEffect(configuration.isPressed ? 0.96 : 1)
+      .brightness(configuration.isPressed ? -0.03 : 0)
+      .animation(.spring(response: 0.2, dampingFraction: 0.6), value: configuration.isPressed)
+  }
+}
+
+/// Words only, for the way out: Skip, Back, Later.
+private struct QuietButton: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    QuietLabel(configuration: configuration)
+  }
+
+  private struct QuietLabel: View {
+    let configuration: ButtonStyleConfiguration
+    @State private var hover = false
+
+    var body: some View {
+      configuration.label
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(hover ? Color.primary : Color.secondary)
+        .padding(.horizontal, 6)
+        .frame(height: 24)
+        .contentShape(Rectangle())
+        .opacity(configuration.isPressed ? 0.6 : 1)
+        .onHover { hover = $0 }
+    }
+  }
+}
+
+/// The three little films: the screen frosting over, the last 10 seconds kept in memory, a finger
+/// on Touch ID. Each loops from the moment its card appears; with Reduce Motion, one still frame.
+private struct IntroFilm: View {
+  let step: Int
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var start = Date()
+
+  var body: some View {
+    TimelineView(.animation(minimumInterval: nil, paused: reduceMotion)) { tl in
+      let t = reduceMotion ? [2.6, 3.4, 1.6][step] : tl.date.timeIntervalSince(start)
+      switch step {
+      case 0: FrostFilm(t: t)
+      case 1: MemoryFilm(t: t)
+      default: TouchFilm(t: t)
+      }
+    }
+  }
+}
+
+/// Keyframes over one loop (0…1), eased between: held before the first and after the last.
+private func keyframes(_ q: Double, _ frames: [(Double, Double)], _ ease: Ease = .out) -> Double {
+  guard let first = frames.first, let last = frames.last else { return 0 }
+  if q <= first.0 { return first.1 }
+  if q >= last.0 { return last.1 }
+  for (a, b) in zip(frames, frames.dropFirst()) where q <= b.0 {
+    return a.1 + (b.1 - a.1) * ease((q - a.0) / max(b.0 - a.0, 0.0001))
+  }
+  return last.1
+}
+
+/// CSS's springy cubic-bezier(.3, 1.35, .5, 1): overshoots a little and settles.
+private let springy = Ease(0.3, 1.35, 0.5, 1)
+
+private struct FrostFilm: View {
+  let t: Double
+
+  var body: some View {
+    let q = (t / 4.2).truncatingRemainder(dividingBy: 1)
+    let fog = keyframes(q, [(0.08, 0), (0.45, 1)])
+    let fade = keyframes(q, [(0.88, 1), (1, 0)], Ease(0.4, 0, 0.6, 1))
+    let notice = keyframes(q, [(0.4, 0), (0.52, 1)], springy)
+    let reach = 117 * fog
+    ZStack {
+      ZStack(alignment: .topLeading) {
+        LinearGradient(colors: [Color(red: 0x3A / 255, green: 0x4A / 255, blue: 0x8E / 255), Color(red: 0x12 / 255, green: 0x1A / 255, blue: 0x3A / 255)],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+        lines
+        lines
+          .blur(radius: 2.5)
+          .background(Color(red: 160 / 255, green: 175 / 255, blue: 210 / 255).opacity(0.28))
+          .mask(Circle().frame(width: reach * 2, height: reach * 2).position(x: 88, y: 48.6))
+          .opacity(fade)
+        HStack(spacing: 6) {
+          ShieldGlyph(look: .guarding).frame(width: 16, height: 16)
+          Capsule().fill(.white.opacity(0.8)).frame(height: 4)
+        }
+        .padding(.horizontal, 8)
+        .frame(width: 92, height: 30)
+        .background(Capsule().fill(.white.opacity(0.18)))
+        .overlay(Capsule().strokeBorder(.white.opacity(0.6), lineWidth: 0.5))
+        .scaleEffect(0.4 + 0.6 * notice)
+        .opacity(min(notice, fade))
+        .position(x: 88, y: 54)
+      }
+      .frame(width: 176, height: 108)
+      .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+      .padding(3)
+      .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color(red: 8 / 255, green: 9 / 255, blue: 12 / 255)))
+      .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.white.opacity(0.12), lineWidth: 1).padding(-1))
+      .offset(y: -6)
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  private var lines: some View {
+    VStack(alignment: .leading, spacing: 7) {
+      ForEach([112.0, 94, 124, 80], id: \.self) { w in
+        Capsule().fill(.white.opacity(0.22)).frame(width: w, height: 5)
+      }
+    }
+    .padding(.leading, 12)
+    .padding(.top, 14)
+    .frame(width: 176, height: 108, alignment: .topLeading)
+  }
+}
+
+private struct MemoryFilm: View {
+  let t: Double
+
+  var body: some View {
+    let roll = CGFloat(t.truncatingRemainder(dividingBy: 1)) * 38
+    let q = (t / 4.2).truncatingRemainder(dividingBy: 1)
+    let kept = keyframes(q, [(0.5, 0), (0.58, 1), (0.92, 1), (1, 0)], Ease(0.25, 0.1, 0.25, 1))
+    GeometryReader { g in
+      let w = g.size.width - 44
+      ZStack(alignment: .topLeading) {
+        Text(verbatim: L("in memory") + " · 10 s")
+          .font(.system(size: 10.5, weight: .semibold))
+          .tracking(0.4)
+          .foregroundStyle(.white.opacity(0.6))
+          .position(x: 22, y: 18)
+          .fixedSize()
+          .frame(width: w, alignment: .leading)
+          .offset(x: 22, y: 12)
+        HStack(spacing: 4) {
+          ForEach(0..<16, id: \.self) { _ in
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+              .fill(LinearGradient(colors: [.white.opacity(0.22), .white.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
+              .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(.white.opacity(0.25), lineWidth: 0.5))
+              .frame(width: 34, height: 44)
+          }
+        }
+        .offset(x: -roll)
+        .frame(width: w, height: 44, alignment: .leading)
+        .clipped()
+        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.18)], startPoint: .leading, endPoint: .trailing))
+        .offset(x: 22, y: 44)
+        HStack {
+          Text(verbatim: "−10 s")
+          Spacer()
+          Text(verbatim: "−5 s")
+          Spacer()
+          Text(L("now"))
+        }
+        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+        .foregroundStyle(.white.opacity(0.55))
+        .frame(width: w)
+        .offset(x: 22, y: 96)
+        VStack(spacing: 6) {
+          Text(L("saved"))
+            .font(.system(size: 10.5, weight: .semibold))
+            .foregroundStyle(Color(red: 1, green: 0x8A / 255, blue: 0x90 / 255))
+            .fixedSize()
+          Rectangle()
+            .fill(Theme.red)
+            .frame(width: 2, height: 64)
+            .shadow(color: Theme.red.opacity(0.7), radius: 5)
+        }
+        .opacity(kept)
+        .position(x: 22 + w - 1, y: 36 + 32 - 8)
+      }
+    }
+  }
+}
+
+private struct TouchFilm: View {
+  let t: Double
+
+  var body: some View {
+    let q = (t / 3.2).truncatingRemainder(dividingBy: 1)
+    let ripple = q < 0.4 ? 0 : keyframes(q, [(0.4, 0), (0.75, 1)], Ease(0, 0, 0.58, 1))
+    let away = keyframes(q, [(0, 1), (0.34, 0), (0.6, 0), (0.8, 1)], Ease(0.22, 0.9, 0.3, 1))
+    let finger = keyframes(q, [(0, 0), (0.18, 0.92), (0.6, 0.92), (0.8, 0)])
+    let shield = keyframes(q, [(0.42, 0), (0.52, 1), (0.86, 1), (1, 0)], springy)
+    GeometryReader { g in
+      let c = CGPoint(x: g.size.width / 2, y: g.size.height / 2)
+      ZStack {
+        RoundedRectangle(cornerRadius: 16 + 13 * ripple, style: .continuous)
+          .stroke(Theme.green.opacity(0.7 * (1 - ripple)), lineWidth: 26 * ripple)
+          .frame(width: 64 + 26 * ripple, height: 64 + 26 * ripple)
+          .opacity(ripple > 0 ? 1 : 0)
+          .position(c)
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+          .fill(LinearGradient(colors: [Color(red: 0x2B / 255, green: 0x2D / 255, blue: 0x36 / 255), Color(red: 0x15 / 255, green: 0x16 / 255, blue: 0x1C / 255)],
+                               startPoint: .top, endPoint: .bottom))
+          .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.white.opacity(0.14), lineWidth: 1))
+          .overlay(Image(systemName: "touchid").font(.system(size: 30)).foregroundStyle(.white.opacity(0.5)))
+          .frame(width: 64, height: 64)
+          .shadow(color: .black.opacity(0.4), radius: 9, y: 6)
+          .position(c)
+        UnevenRoundedRectangle(topLeadingRadius: 15, bottomLeadingRadius: 12, bottomTrailingRadius: 12, topTrailingRadius: 15, style: .continuous)
+          .fill(LinearGradient(colors: [Color(red: 0xF2 / 255, green: 0xC6 / 255, blue: 0xA6 / 255), Color(red: 0xD9 / 255, green: 0xA0 / 255, blue: 0x7C / 255)],
+                               startPoint: .top, endPoint: .bottom))
+          .frame(width: 30, height: 40)
+          .rotationEffect(.degrees(18 * away))
+          .offset(x: 40 * away, y: 60 * away)
+          .opacity(finger)
+          .position(x: c.x, y: c.y + 10)
+        ShieldGlyph(look: .clear)
+          .frame(width: 30, height: 30)
+          .scaleEffect(0.3 + 0.7 * shield)
+          .opacity(min(1, shield))
+          .position(x: g.size.width - 26 - 15, y: 26 + 15)
+      }
+    }
+  }
+}
+
+/// Design A's switch: the label on the left, the switch at the trailing edge, amber when on. Test
+/// mode's is striped, as everything silent is. The knob stretches while pressed.
+struct AmberSwitch: ToggleStyle {
+  var striped = false
+
+  func makeBody(configuration: Configuration) -> some View {
+    HStack(spacing: 12) {
       configuration.label
       Spacer(minLength: 0)
-      Button { configuration.isOn.toggle() } label: {
-        ZStack(alignment: configuration.isOn ? .trailing : .leading) {
-          Capsule()
-            .fill(configuration.isOn ? amberDeep : Color.primary.opacity(0.08))
-            .overlay {
-              if configuration.isOn { Stripes().clipShape(Capsule()) }
-            }
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
-          Circle()
-            .fill(Color.white)
-            .shadow(color: .black.opacity(0.25), radius: 1.5, y: 1)
-            .frame(width: 20, height: 20)
-            .padding(2)
-        }
-        .frame(width: 40, height: 24)
-        .contentShape(Capsule())
-        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isOn)
-      }
-      .buttonStyle(.plain)
+      Button { configuration.isOn.toggle() } label: { EmptyView() }
+        .buttonStyle(SwitchBody(on: configuration.isOn, striped: striped))
     }
     .accessibilityElement(children: .combine)
     .accessibilityValue(configuration.isOn ? L("On") : L("Off"))
   }
 }
 
-/// 6 pt bands at 45°, 12 pt apart: the CSS repeating-linear-gradient(135deg) of the design.
-private struct Stripes: View {
-  var body: some View {
-    Canvas { ctx, size in
-      var p = Path()
-      var x = -size.height
-      while x < size.width + size.height {
-        p.move(to: CGPoint(x: x, y: size.height))
-        p.addLine(to: CGPoint(x: x + size.height, y: 0))
-        x += 12 * CGFloat(2).squareRoot()
+private struct SwitchBody: ButtonStyle {
+  let on: Bool
+  let striped: Bool
+
+  func makeBody(configuration: Configuration) -> some View {
+    let pressed = configuration.isPressed
+    return ZStack(alignment: on ? .trailing : .leading) {
+      Capsule().fill(on ? Theme.amberDeep : Theme.fill2)
+      if on && striped {
+        Stripes(band: 4.2).clipShape(Capsule())
       }
-      ctx.stroke(p, with: .color(Color(red: 0xF6 / 255, green: 0xBE / 255, blue: 0x5E / 255)), lineWidth: 6)
+      Capsule().strokeBorder(Theme.separator, lineWidth: 0.5)
+      Capsule()
+        .fill(Color.white)
+        .shadow(color: .black.opacity(0.3), radius: 1.25, y: 1)
+        .frame(width: pressed ? 22 : 18, height: 18)
+        .padding(2)
     }
+    .frame(width: 38, height: 22)
+    .contentShape(Capsule())
+    .animation(.spring(response: 0.34, dampingFraction: 0.62), value: on)
+    .animation(Theme.out(0.2), value: pressed)
   }
 }
 
-private struct Back: View {
-  let title: String
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      HStack(spacing: 6) {
-        Image(systemName: "chevron.left").font(.system(size: 11, weight: .semibold))
-        Text(title).font(.system(size: 14, weight: .semibold))
-      }
-      .contentShape(Rectangle())
-    }
-    .buttonStyle(.plain)
-  }
-}
-
-private struct Step: View {
+struct Step: View {
   let n: Int
   let text: String
 
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 7) {
-      Text("\(n)")
+      Text(verbatim: "\(n)")
         .font(.system(size: 10.5, weight: .bold))
-        .foregroundStyle(ink)
+        .foregroundStyle(Theme.ink)
         .frame(width: 16, height: 16)
-        .background(Circle().fill(amber))
-      Text(text).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+        .background(Circle().fill(Theme.amber))
+      Text(text)
+        .font(Theme.caption)
+        .fixedSize(horizontal: false, vertical: true)
     }
   }
 }
 
-private struct QRView: View {
+struct QRView: View {
   let text: String
 
   var body: some View {
@@ -891,9 +1799,9 @@ private struct QRView: View {
         Color.secondary.opacity(0.2)
       }
     }
-    .frame(width: 112, height: 112)
+    .frame(width: 104, height: 104)
     .padding(6)
-    .background(RoundedRectangle(cornerRadius: 10).fill(.white))
+    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.white))
   }
 }
 

@@ -13,6 +13,24 @@ enum Place: String, CaseIterable, Codable {
     }
   }
 
+  /// The SF Symbol on the place picker.
+  var symbol: String {
+    switch self {
+    case .library: "books.vertical"
+    case .cafe: "cup.and.saucer"
+    case .transit: "tram"
+    }
+  }
+
+  /// What counts here, under the picker.
+  var hint: String {
+    switch self {
+    case .library: L("Quiet table: a firm nudge or a lift sounds the alarm")
+    case .cafe: L("Busy table: bumps are ignored, carrying it is not")
+    case .transit: L("Moving vehicle: only tilt, the lid, the charger and touch count")
+    }
+  }
+
   /// Library: the calibrated knobs. Café: tables get bumped, so movement has to be firmer and last
   /// longer. On the go: a train or a bus shakes all the time, so only tilt, the lid, the charger and
   /// input count, and tilt gets more room for braking and bends.
@@ -58,6 +76,18 @@ enum Prefs {
   static var introSeen: Bool {
     get { d.bool(forKey: "introSeen") }
     set { d.set(newValue, forKey: "introSeen") }
+  }
+
+  /// When the panel last showed the alarms: a newer real alarm puts a red dot on the menu-bar
+  /// shield and "New" on its Recent row. Unset (before this existed) counts as now.
+  static var alarmsSeenAt: Date {
+    get {
+      if let date = d.object(forKey: "alarmsSeenAt") as? Date { return date }
+      let now = Date()
+      d.set(now, forKey: "alarmsSeenAt")
+      return now
+    }
+    set { d.set(newValue, forKey: "alarmsSeenAt") }
   }
 
   /// The frosted screen while armed. Off: the old invisible mode, the menu bar icon shows the state.

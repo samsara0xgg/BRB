@@ -19,12 +19,29 @@ struct Session: Codable {
   var clip: String?
   var test: Bool
 
-  /// The line under "Recent": "Away 25 min, nobody touched it".
-  var line: String {
-    if let trigger { return trigger.headline + " · " + disarm.phrase }
+  /// The first line of a Recent row: what happened.
+  var title: String {
+    if let trigger { return trigger.headline }
+    switch disarm {
+    case .sensorsSilent, .tapFailed, .stopped: return disarm.phrase
+    default: break
+    }
     if bumps > 0 { return bumps == 1 ? L("Ignored 1 bump") : L("Ignored %ld bumps", bumps) }
-    return L("%@, nobody touched it", Clock.away(ended.timeIntervalSince(armed)))
+    return L("Nobody touched it")
   }
+
+  /// The second line: when, and how it ended or how long it lasted.
+  var detail: String {
+    let how = trigger != nil ? disarm.phrase : Clock.away(ended.timeIntervalSince(armed))
+    let line = Clock.when(triggeredAt ?? armed) + " · " + how
+    return test ? line + " · " + L("Test · silent") : line
+  }
+
+  /// Ended in an alarm (a test run's included).
+  var alarmed: Bool { trigger != nil }
+
+  /// Ended normally: the guarding ran and was stopped by its owner.
+  var quiet: Bool { trigger == nil && [.fingerprint, .unlock, .password].contains(disarm) }
 
   /// What the notice says as the fog clears.
   var welcome: Welcome {

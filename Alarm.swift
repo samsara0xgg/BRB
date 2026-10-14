@@ -28,6 +28,22 @@ final class Alarm {
     log("alarm volume 0 (the old silent setting) migrated to test mode and 70 %")
   }
 
+  /// 0.6 s of the loud stage at the set volume, for the slider in Settings (audit B4). The owner's
+  /// volume comes back after, as after an alarm.
+  static func preview(done: @escaping () -> Void = {}) {
+    guard let alarm = Alarm() else { return done() }
+    do {
+      try alarm.play(.loud)
+    } catch {
+      log("preview failed: \(error)")
+      return done()
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+      alarm.stop()
+      done()
+    }
+  }
+
   private let device: AudioDeviceID
   private let engine = AVAudioEngine()
   private let synth = Synth()
