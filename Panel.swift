@@ -299,6 +299,8 @@ final class PanelModel: ObservableObject {
   @Published var linkReset = false
   @Published var liveLink = Live.link.absoluteString
   @Published var previewing = false
+  /// The line under the volume that says what "Preview…" is about to play.
+  @Published var confirmPreview = false
   @Published var previewAt = Date.distantPast
   @Published var settingsTab = SettingsTab.general
 
@@ -318,6 +320,7 @@ final class PanelModel: ObservableObject {
   private var folds: Set<Check.ID> = []
   private var awaiting: Timer?
   private var resetAsk = 0
+  private var previewAsk = 0
 
   init(canned: Bool = false) {
     self.canned = canned
@@ -365,6 +368,7 @@ final class PanelModel: ObservableObject {
     liveLink = Live.link.absoluteString
     copied = nil
     confirmReset = false
+    confirmPreview = false
     refreshChecks()
   }
 
@@ -606,8 +610,26 @@ final class PanelModel: ObservableObject {
     }
   }
 
-  /// 0.6 s of the siren at the set volume (audit B4).
+  /// "Preview…" first says what will sound, how loud and that headphones don't stop it; nobody
+  /// answering folds it back after 8 s. A preview that just plays out of nowhere is startling.
+  func askPreview() {
+    guard phase == .idle, !previewing else { return }
+    withAnimation(Theme.out(0.3)) { confirmPreview = true }
+    previewAsk += 1
+    let ask = previewAsk
+    DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+      guard let self, confirmPreview, previewAsk == ask else { return }
+      withAnimation(Theme.out(0.3)) { self.confirmPreview = false }
+    }
+  }
+
+  func cancelPreview() {
+    withAnimation(Theme.out(0.3)) { confirmPreview = false }
+  }
+
+  /// 0.6 s of the siren at the set volume (audit B4), once confirmed.
   func preview() {
+    withAnimation(Theme.out(0.3)) { confirmPreview = false }
     guard phase == .idle, !previewing else { return }
     previewing = true
     previewAt = Date()

@@ -350,7 +350,7 @@ func sirenCommand(seconds: Double) {
 func snapshotCommand(_ what: String, out: String?) {
   let veilStages = ["countdown", "armed", "test", "alarm", "welcome", "other"]
   let panelStages = ["panel", "silent", "notready", "mini", "intro", "intro2", "intro3"]
-  let tabs: [String: SettingsTab] = ["settings": .general, "settings-phone": .phone, "settings-recordings": .recordings, "settings-checks": .checks]
+  let tabs: [String: SettingsTab] = ["settings": .general, "settings-preview": .general, "settings-phone": .phone, "settings-recordings": .recordings, "settings-checks": .checks]
   if what == "icons", let out { exit(renderIcons(to: out) ? 0 : 1) }
   guard veilStages.contains(what) || panelStages.contains(what) || tabs[what] != nil else {
     let all = veilStages + panelStages + tabs.keys.sorted() + ["icons"]
@@ -419,6 +419,7 @@ func snapshotCommand(_ what: String, out: String?) {
     p.clips = [Clip(url: Recorder.folder.appendingPathComponent("alarm.mov"), date: now, session: alarmed, bytes: 18_400_000),
                Clip(url: Recorder.folder.appendingPathComponent("trial.mov"), date: trial.ended, session: trial, bytes: 6_200_000)]
     p.optionHeld = what == "silent"
+    p.confirmPreview = what == "settings-preview"
     if what == "mini" {  // the countdown in the panel, when the frosted screen is off
       p.phase = .arming
       p.countdownFrom = now.addingTimeInterval(-2.4)
