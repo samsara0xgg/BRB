@@ -11,6 +11,8 @@ final class Veil {
   let model = VeilModel()
   /// A screen came or went and the windows were rebuilt: the Touch ID view needs the new host.
   var onRebuild: () -> Void = {}
+  /// The notice reached the menu-bar shield (or there was no notice): the shield turns green.
+  var onLanded: () -> Void = {}
   private var windows: [VeilWindow] = []
   private var screens: NSObjectProtocol?
   private var awake: IOPMAssertionID = 0
@@ -20,10 +22,16 @@ final class Veil {
   var host: NSWindow? { windows.first { $0.showsNotice } ?? windows.first }
   var isUp: Bool { !windows.isEmpty }
 
+  private var still: Bool { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+
   /// Counting down: the fog spreads out from the notice and reaches the corners as it starts guarding.
+  /// The ring is drawn from `countdownFrom`, so it and the menu-bar shield never drift apart.
   func countdown(_ seconds: Int) {
     open()
     model.remaining = seconds
+    model.countdownFrom = Date()
+    model.countdownSeconds = Double(seconds)
+    model.ringLive = true
     model.stage = .countdown
     windows.forEach { $0.frost.spread(over: Double(seconds)) }
   }
@@ -31,12 +39,23 @@ final class Veil {
   /// Straight to guarding, fully frosted: a session resumed after a restart.
   func guarding() {
     open()
+    model.ringLive = false
     model.stage = .armed
     windows.forEach { $0.frost.cover() }
   }
 
+  /// The moment it starts: the ring flashes white, a shock wave leaves its rim and the glass lights
+  /// up, then the glass stretches into the notice (audit C3).
   func armed() {
-    model.stage = .armed
+    guard model.stage == .countdown, !still else {
+      model.ringLive = false
+      model.stage = .armed
+      return
+    }
+    model.shockAt = Date()
+    model.shock += 1
+    later(0.13) { self.model.stage = .armed }
+    later(0.5) { self.model.ringLive = false }
   }
 
   /// Red spreads from where the Mac was touched: `pointer` in global display coordinates (top-left
@@ -51,31 +70,47 @@ final class Veil {
       model.origin = origin
     }
     model.alarmAt = Date()
+    model.ringLive = false
     model.stage = .alarm
+    model.flinch += 1  // the notice flinches, as if touched (audit C4)
     windows.forEach { $0.frost.alarm(true) }
   }
 
   /// Back: the fog clears from the bottom-right, where Touch ID is; the notice says what happened,
-  /// then shrinks into the menu-bar shield at `target` (its screen frame).
+  /// then flies into the menu-bar shield at `target` (its screen frame). After an alarm it stays
+  /// 4.2 s instead of 2.6, long enough to read (audit A6).
   func welcome(_ welcome: Welcome, toward target: NSRect?) {
-    guard isUp else { return }
+    guard isUp else { return onLanded() }
+    pending.forEach { $0.cancel() }
+    pending.removeAll()
     model.welcome = welcome
     model.leaveTarget = target.flatMap(noticePoint)
+    model.ringLive = false
     model.stage = .welcome
     windows.forEach {
       $0.frost.alarm(false)
       $0.frost.melt()
     }
-    later(2.6) { self.model.leaving = true }
-    later(3.4) { self.close() }
+    let hold = welcome.alarmed ? 4.2 : 2.6
+    let flight = still ? 0.2 : 0.74
+    later(hold) { self.model.leaving = true }
+    later(hold + flight) { self.onLanded() }
+    later(hold + flight + 0.08) { self.close() }
   }
 
-  /// Cancelled during the countdown: the fog pulls back and the windows go.
+  /// Cancelled during the countdown: the ring unwinds the way it came, the glass follows and the fog
+  /// pulls back (audit C6).
   func cancel() {
     guard isUp else { return }
-    model.stage = .hidden
+    pending.forEach { $0.cancel() }
+    pending.removeAll()
+    let p = Date().timeIntervalSince(model.countdownFrom) / max(model.countdownSeconds, 0.1)
+    model.unwindFrom = model.stage == .countdown ? min(max(p, 0), 1) : 0
+    model.unwindAt = Date()
+    model.cancelling = true
     windows.forEach { $0.frost.retreat() }
-    later(0.6) { self.close() }
+    later(0.18) { self.model.stage = .hidden }
+    later(0.65) { self.close() }
   }
 
   func close() {
@@ -87,6 +122,8 @@ final class Veil {
     screens = nil
     model.stage = .hidden
     model.leaving = false
+    model.cancelling = false
+    model.ringLive = false
     keepDisplayOn(false)
   }
 
@@ -94,6 +131,7 @@ final class Veil {
     pending.forEach { $0.cancel() }
     pending.removeAll()
     model.leaving = false
+    model.cancelling = false
     guard windows.isEmpty else { return }
     build()
     screens = NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
@@ -177,6 +215,20 @@ final class VeilModel: ObservableObject {
   @Published var welcome = Welcome(title: "", sub: "", chips: [], alarmed: false)
   @Published var leaving = false
   @Published var leaveTarget: CGPoint?
+  /// When the countdown started and how long it runs: the ring is drawn from these.
+  @Published var countdownFrom = Date()
+  @Published var countdownSeconds = 5.0
+  /// The ring is drawn: from the countdown until its flash has faded, and while it unwinds.
+  @Published var ringLive = false
+  /// Each increment: the white flash and the shock wave as guarding starts.
+  @Published var shock = 0
+  @Published var shockAt = Date.distantPast
+  /// Cancelled: the ring unwinds from `unwindFrom` and the glass fades.
+  @Published var cancelling = false
+  @Published var unwindFrom = 0.0
+  @Published var unwindAt = Date.distantPast
+  /// Each increment: the notice flinches as an alarm starts.
+  @Published var flinch = 0
 }
 
 private final class VeilWindow: NSWindow {
@@ -445,8 +497,6 @@ private final class GrainLayer: CALayer {
 
 // MARK: - the notice
 
-private let amber = Color(red: 0xF6 / 255, green: 0xB5 / 255, blue: 0x44 / 255)
-
 struct VeilView: View {
   @ObservedObject var model: VeilModel
   let showsNotice: Bool
@@ -462,11 +512,7 @@ struct VeilView: View {
           if showsNotice {
             NoticeView(model: model, size: g.size, pulse: pulse)
           } else {
-            Text(smallLine)
-              .font(.system(size: 15, weight: .medium))
-              .foregroundStyle(.white.opacity(0.8))
-              .opacity(model.stage == .hidden || model.leaving ? 0 : 1)
-              .animation(.easeInOut(duration: 0.3), value: model.stage)
+            MiniSign(model: model)
               .position(x: g.size.width / 2, y: g.size.height / 2)
           }
         }
@@ -482,15 +528,6 @@ struct VeilView: View {
     return f < 0.15 ? 1 : 1 - (f - 0.15) / 0.85
   }
 
-  private var smallLine: String {
-    switch model.stage {
-    case .countdown: L("Guarding starts in %ld s", model.remaining)
-    case .alarm: L("Alarm raised")
-    case .welcome: model.welcome.title
-    default: L("Please don't touch. This Mac is guarded.")
-    }
-  }
-
   /// Red from the touch point: out over 800 ms, then pulsing with the beep.
   private func flood(_ size: CGSize, _ pulse: Double) -> some View {
     let on = model.stage == .alarm
@@ -498,7 +535,7 @@ struct VeilView: View {
     let center = CGPoint(x: o.x * size.width, y: o.y * size.height)
     let corners = [CGPoint.zero, CGPoint(x: size.width, y: 0), CGPoint(x: 0, y: size.height), CGPoint(x: size.width, y: size.height)]
     let reach = (corners.map { hypot($0.x - center.x, $0.y - center.y) }.max() ?? 1000) * 1.15
-    return Color(red: 220 / 255, green: 38 / 255, blue: 52 / 255)
+    return Theme.flood
       .opacity(on ? 0.2 + 0.26 * pulse : 0)
       .animation(.easeOut(duration: 0.4), value: on)
       .mask {
@@ -513,65 +550,140 @@ struct VeilView: View {
   }
 }
 
+/// The other screens: the same glass, smaller, with the shield and one line, so a second display
+/// says what the built-in one says (audit C7).
+private struct MiniSign: View {
+  @ObservedObject var model: VeilModel
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  var body: some View {
+    let visible = model.stage != .hidden && !model.leaving && !model.cancelling
+    HStack(spacing: 14) {
+      ShieldGlyph(look: icon)
+        .frame(width: 34, height: 34)
+      Text(title)
+        .font(.system(size: 28, weight: .semibold))
+        .lineLimit(1)
+        .contentTransition(.numericText(countsDown: true))
+    }
+    .foregroundStyle(.white)
+    .padding(.leading, 22)
+    .padding(.trailing, 30)
+    .frame(height: 76)
+    .fixedSize()
+    .modifier(GlassCapsule(look: look, rim: 1.5))
+    .animation(Theme.motion(Theme.glass, reduced: reduceMotion), value: model.stage)
+    .animation(.default, value: model.remaining)
+    .scaleEffect(visible ? 1 : 0.94)
+    .opacity(visible ? 1 : 0)
+    .animation(Theme.motion(Theme.out(0.45), reduced: reduceMotion), value: visible)
+  }
+
+  private var title: String {
+    switch model.stage {
+    case .countdown: L("Guarding starts in %ld s", model.remaining)
+    case .alarm: L("Alarm raised")
+    case .welcome: model.welcome.title
+    default: L("Please don't touch")
+    }
+  }
+
+  private var icon: ShieldGlyph.Look {
+    switch model.stage {
+    case .alarm: .alarm
+    case .welcome: .clear
+    default: .guarding
+    }
+  }
+
+  private var look: GlassCapsule.Look {
+    switch model.stage {
+    case .alarm: .alarm
+    case .welcome: .dark
+    default: .clear
+    }
+  }
+}
+
 private struct NoticeView: View {
   @ObservedObject var model: VeilModel
   let size: CGSize
   let pulse: Double
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.colorSchemeContrast) private var contrast
+  @State private var appeared = false
+  @State private var seal = 0.0
+  @State private var shockScale: CGFloat = 1
+  @State private var shockOpacity = 0.0
 
   var body: some View {
     let center = CGPoint(x: size.width / 2, y: size.height * 0.438)
     let stage = model.stage
+    let counting = stage == .countdown && !model.cancelling
+    let tagged = model.test && (stage == .armed || stage == .alarm)
     ZStack {
+      shockRing.position(center)
       capsule.position(center)
       chips.position(x: center.x, y: center.y + 119)
-      countdownText
-        .opacity(stage == .countdown ? 1 : 0)
-        .animation(.easeInOut(duration: 0.3).delay(stage == .countdown ? 0.5 : 0), value: stage)
-        .position(x: center.x, y: center.y + 180)
+      Color.clear
+        .frame(width: 1, height: 1)
+        .overlay(alignment: .top) {  // hangs from 142 pt under the ring's center, however tall it is
+          countdownText
+            .opacity(counting ? 1 : 0)
+            .animation(counting ? .easeInOut(duration: 0.3).delay(0.5) : .easeOut(duration: 0.2), value: counting)
+        }
+        .position(x: center.x, y: center.y + 142)
       foot
         .opacity(stage == .armed ? 1 : 0)
         .animation(.easeInOut(duration: 0.5).delay(stage == .armed ? 0.5 : 0), value: stage)
         .position(x: center.x, y: size.height - 136)
-      if model.test && (stage == .armed || stage == .alarm) {
-        testTag
-          .padding(EdgeInsets(top: 22, leading: 24, bottom: 0, trailing: 0))
-          .frame(width: size.width, height: size.height, alignment: .topLeading)
-      }
+      testTag
+        .opacity(tagged ? 1 : 0)
+        .offset(y: tagged ? 0 : -6)
+        .animation(Theme.motion(.spring(duration: 0.4, bounce: 0.3), reduced: reduceMotion), value: tagged)
+        .padding(EdgeInsets(top: 22, leading: 24, bottom: 0, trailing: 0))
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
     .frame(width: size.width, height: size.height)
     .opacity(stage == .hidden ? 0 : 1)
     .animation(.easeInOut(duration: 0.35), value: stage == .hidden)
-    .scaleEffect(model.leaving ? 0.05 : 1, anchor: UnitPoint(x: 0.5, y: 0.438))
-    .offset(leaveOffset(center))
-    .opacity(model.leaving ? 0 : 1)
-    .animation(.timingCurve(0.6, 0, 0.8, 0.3, duration: 0.7), value: model.leaving)
+    .modifier(Flight(leaving: model.leaving, anchor: UnitPoint(x: 0.5, y: 0.438), offset: leaveOffset(center), still: reduceMotion))
+    .onChange(of: model.shock) { _, _ in shockwave() }
   }
 
   private func leaveOffset(_ center: CGPoint) -> CGSize {
-    guard model.leaving, let t = model.leaveTarget else { return .zero }
+    guard let t = model.leaveTarget else { return .zero }
     return CGSize(width: t.x - center.x, height: t.y - center.y)
   }
 
   // The same piece of glass is the countdown ring and the notice: it stretches from a circle into a
   // capsule instead of swapping one element for another.
   private var capsule: some View {
-    let counting = model.stage == .countdown
-    let w: CGFloat = counting ? 212 : SignLabel.width(title: title, sub: sub)
-    let h: CGFloat = counting ? 212 : (model.stage == .welcome ? 140 : 150)
+    let round = model.stage == .countdown || model.cancelling
+    let counting = model.stage == .countdown && !model.cancelling
+    let w: CGFloat = round ? 212 : SignLabel.width(title: title, sub: sub)
+    let h: CGFloat = round ? 212 : (model.stage == .welcome ? 140 : 150)
     return ZStack {
-      CountdownRing(model: model)
+      if model.ringLive {
+        CountdownRing(model: model)
+          .opacity(round ? 1 : 0)
+          .animation(.easeOut(duration: 0.28), value: round)
+      }
+      Digits(value: model.remaining)
         .opacity(counting ? 1 : 0)
         .animation(.easeOut(duration: 0.28), value: counting)
       SignLabel(icon: icon, title: title, sub: sub, breathing: model.stage == .armed && !reduceMotion)
         .fixedSize()
-        .opacity(counting ? 0 : 1)
-        .animation(.easeOut(duration: 0.4).delay(counting ? 0 : 0.3), value: counting)
+        .id(title + "\n" + sub)  // a new sign cross-fades in while the glass changes shape
+        .transition(.asymmetric(insertion: .opacity.animation(.easeOut(duration: 0.4).delay(0.06)),
+                                removal: .opacity.animation(.easeOut(duration: 0.3))))
+        .opacity(round ? 0 : 1)
+        .animation(.easeOut(duration: 0.4).delay(round ? 0 : 0.3), value: round)
     }
     .frame(width: w, height: h)
     .clipShape(Capsule())
     .modifier(GlassCapsule(look: glassLook, rim: contrast == .increased ? 2 : 1.5))
+    .overlay(Capsule().fill(.white.opacity(seal)).allowsHitTesting(false))  // the glass lights up as it starts
     .overlay {
       if model.stage == .armed && !reduceMotion { Sweep() }
     }
@@ -582,7 +694,35 @@ private struct NoticeView: View {
           .padding(-10 * pulse)
       }
     }
-    .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.62, bounce: 0.3), value: model.stage)
+    .animation(Theme.motion(Theme.glass, reduced: reduceMotion), value: model.stage)
+    .modifier(Shake(model.flinch, amount: reduceMotion ? 0 : 12))  // touched: it flinches (audit C4)
+    .animation(.timingCurve(0.36, 0.07, 0.19, 0.97, duration: 0.46), value: model.flinch)
+    .scaleEffect(appeared ? 1 : 0.92)
+    .opacity(appeared ? 1 : 0)
+    .onAppear {
+      withAnimation(Theme.motion(Theme.out(0.5), reduced: reduceMotion)) { appeared = true }
+    }
+  }
+
+  /// The shock wave leaving the ring's rim as guarding starts (audit C3).
+  private var shockRing: some View {
+    Circle()
+      .strokeBorder(.white.opacity(0.75), lineWidth: 2)
+      .background(Circle().strokeBorder(Theme.amber.opacity(0.35), lineWidth: 10).blur(radius: 6))
+      .shadow(color: Theme.amber.opacity(0.55), radius: 17)
+      .frame(width: 212, height: 212)
+      .scaleEffect(shockScale)
+      .opacity(shockOpacity)
+      .allowsHitTesting(false)
+  }
+
+  private func shockwave() {
+    guard !reduceMotion else { return }
+    replay(.timingCurve(0.15, 0.6, 0.3, 1, duration: 0.8)) { go in
+      shockScale = go ? 2.5 : 1
+      shockOpacity = go ? 0 : 0.95
+    }
+    replay(Theme.out(0.5)) { go in seal = go ? 0 : 0.28 }
   }
 
   private var glassLook: GlassCapsule.Look {
@@ -652,25 +792,31 @@ private struct NoticeView: View {
     .animation(.spring(duration: 0.4, bounce: 0.3).delay(shown ? 0.42 : 0), value: stage)
   }
 
+  /// No second number under the ring (audit C1): the keys say how to stop it.
   private var countdownText: some View {
-    VStack(spacing: 10) {
-      Text(L("Walk away. Guarding starts in %ld s", model.remaining))
+    VStack(spacing: 12) {
+      Text(L("Leave it lying still and walk away"))
         .font(.system(size: 26, weight: .semibold))
-      HStack(spacing: 6) {
-        Text("esc")
-          .font(.system(size: 12.5, weight: .semibold, design: .monospaced))
-          .padding(.horizontal, 7)
-          .padding(.vertical, 4)
-          .background(RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.16)))
-          .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.3), lineWidth: 0.5))
-        Text(L("cancels · or rest a finger on Touch ID"))
+      HStack(spacing: 8) {
+        Keycap(dark: true) {
+          Text(verbatim: "esc")
+            .font(.system(size: 12.5, weight: .semibold, design: .monospaced))
+        }
+        Text(L("cancels"))
+        Text(verbatim: "·")
+          .opacity(0.5)
+        Keycap(dark: true) {
+          Image(systemName: "touchid")
+            .font(.system(size: 15))
+        }
+        Text(L("or rest a finger on Touch ID"))
       }
       .font(.system(size: 15))
       .foregroundStyle(.white.opacity(0.74))
       if model.test {
         Text(L("Test mode: this run stays silent"))
           .font(.system(size: 14))
-          .foregroundStyle(Color(red: 1, green: 0xD5 / 255, blue: 0x8A / 255))
+          .foregroundStyle(Theme.amberHi)
       }
     }
     .foregroundStyle(.white)
@@ -686,14 +832,48 @@ private struct NoticeView: View {
       .fixedSize()
   }
 
+  /// Striped like the test-mode switch, so a test run never looks like the real thing (audit C8).
   private var testTag: some View {
     Text(L("Test · silent"))
       .font(.system(size: 13, weight: .semibold))
-      .foregroundStyle(Color(red: 0x24 / 255, green: 0x17 / 255, blue: 0))
-      .padding(.horizontal, 12)
+      .foregroundStyle(Theme.ink)
+      .padding(.horizontal, 13)
       .frame(height: 30)
-      .background(Capsule().fill(amber))
+      .background {
+        ZStack {
+          Capsule().fill(Theme.amberDeep)
+          Stripes(band: 6).clipShape(Capsule())
+        }
+      }
+      .shadow(color: .black.opacity(0.3), radius: 6, y: 2)
       .fixedSize()
+  }
+}
+
+/// Back to the menu bar: x eases in and y eases out, so the notice rises and then swings into the
+/// shield along an arc, shrinking as it goes (audit C5). With Reduce Motion it only fades.
+private struct Flight: ViewModifier {
+  let leaving: Bool
+  let anchor: UnitPoint
+  let offset: CGSize
+  let still: Bool
+
+  @ViewBuilder func body(content: Content) -> some View {
+    if still {
+      content
+        .opacity(leaving ? 0 : 1)
+        .animation(.easeInOut(duration: 0.2), value: leaving)
+    } else {
+      content
+        .scaleEffect(leaving ? 0.05 : 1, anchor: anchor)
+        .animation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.75), value: leaving)
+        .opacity(leaving ? 0 : 1)
+        .animation(.linear(duration: 0.28).delay(0.47), value: leaving)
+        .offset(y: leaving ? offset.height : 0)
+        .animation(.timingCurve(0.2, 0.75, 0.35, 1, duration: 0.75), value: leaving)
+        .offset(x: leaving ? offset.width : 0)
+        .animation(.timingCurve(0.55, 0, 0.75, 0.35, duration: 0.75), value: leaving)
+    }
   }
 }
 
@@ -719,7 +899,7 @@ private struct SignLabel: View {
       ZStack {
         Circle().fill(.white.opacity(0.12))
         Circle().strokeBorder(.white.opacity(0.3), lineWidth: 0.5)
-        ShieldGlyph(look: icon)
+        ShieldGlyph(look: icon, drawsTick: icon == .clear)  // back: the tick draws itself in
           .frame(width: 44, height: 44)
           .scaleEffect(inhaled ? 1.06 : 1)
           .opacity(inhaled ? 0.86 : 1)
@@ -751,40 +931,111 @@ private struct SignLabel: View {
   }
 }
 
+/// The ring: a faint track, the amber arc brightening toward its head, a glowing head, and the white
+/// flash as guarding starts (audit C2). Drawn from the clock, so it never drifts from the digits; on
+/// a cancel it unwinds the way it came (audit C6).
 private struct CountdownRing: View {
   @ObservedObject var model: VeilModel
-  @State private var progress = 0.0
+
+  var body: some View {
+    TimelineView(.animation) { tl in
+      let p = progress(at: tl.date)
+      let lit = flash(at: tl.date)
+      Canvas { ctx, size in
+        CountdownRing.draw(&ctx, size, p, lit)
+      }
+    }
+    .frame(width: 212, height: 212)
+  }
+
+  private func progress(at now: Date) -> Double {
+    if model.cancelling {
+      let q = min(1, now.timeIntervalSince(model.unwindAt) / 0.45)
+      return model.unwindFrom * (1 - Ease.retreat(q))
+    }
+    guard model.stage == .countdown else { return 1 }
+    return min(1, max(0, now.timeIntervalSince(model.countdownFrom) / max(model.countdownSeconds, 0.1)))
+  }
+
+  private func flash(at now: Date) -> Double {
+    let q = now.timeIntervalSince(model.shockAt) / 0.38
+    return q >= 0 && q < 1 ? 1 - q : 0
+  }
+
+  static func draw(_ ctx: inout GraphicsContext, _ size: CGSize, _ p: Double, _ flash: Double) {
+    let c = CGPoint(x: size.width / 2, y: size.height / 2)
+    let r = 91.5
+    func arc(_ a0: Double, _ a1: Double) -> Path {
+      var path = Path()
+      path.addArc(center: c, radius: r, startAngle: .radians(a0), endAngle: .radians(a1), clockwise: false)
+      return path
+    }
+    func point(_ a: Double) -> CGPoint { CGPoint(x: c.x + r * cos(a), y: c.y + r * sin(a)) }
+    let circle = Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
+    ctx.stroke(circle, with: .color(.white.opacity(0.16)), lineWidth: 5)
+    if p > 0.002 {
+      let a0 = -Double.pi / 2, a1 = a0 + 2 * .pi * p
+      ctx.stroke(arc(a0, a1), with: .color(Theme.amber), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+      // The last half radian brightens toward white; over so short an arc the chord's gradient
+      // matches the conic one.
+      let span = min(0.55, a1 - a0)
+      if span > 0.02 {
+        let cream = Color(red: 1, green: 242 / 255, blue: 214 / 255)
+        ctx.stroke(arc(a1 - span, a1),
+                   with: .linearGradient(Gradient(colors: [cream.opacity(0), cream.opacity(0.95)]), startPoint: point(a1 - span), endPoint: point(a1)),
+                   style: StrokeStyle(lineWidth: 5, lineCap: .butt))
+      }
+      var glow = ctx
+      glow.addFilter(.shadow(color: Color(red: 1, green: 196 / 255, blue: 100 / 255).opacity(0.95), radius: 5))
+      let head = point(a1)
+      glow.fill(Path(ellipseIn: CGRect(x: head.x - 3.4, y: head.y - 3.4, width: 6.8, height: 6.8)), with: .color(.white))
+    }
+    if flash > 0 {
+      ctx.stroke(circle, with: .color(.white.opacity(flash)), lineWidth: 5 + 4 * flash)
+    }
+  }
+}
+
+/// The countdown's number: each second rises in from below and sharpens as the last one leaves
+/// upward (audit C1).
+private struct Digits: View {
+  let value: Int
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     ZStack {
-      Circle()
-        .stroke(.white.opacity(0.16), lineWidth: 5)
-      Circle()
-        .trim(from: 0, to: progress)
-        .stroke(amber, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-        .rotationEffect(.degrees(-90))
-      Text("\(model.remaining)")
-        .font(.system(size: 92, weight: .thin))
+      Text(verbatim: "\(value)")
+        .font(.system(size: 92, weight: .thin, design: .rounded))
         .monospacedDigit()
         .foregroundStyle(.white)
-        .id(model.remaining)
-        .transition(.asymmetric(insertion: .scale(scale: 1.28).combined(with: .opacity),
-                                removal: .opacity.animation(.linear(duration: 0.05))))
+        .id(value)
+        .transition(shift)
     }
-    .padding(12)
-    .frame(width: 212, height: 212)
-    .animation(.spring(duration: 0.42, bounce: 0.4), value: model.remaining)
-    .onAppear { fill(model.stage) }  // the window is built with the stage already set
-    .onChange(of: model.stage) { _, stage in fill(stage) }
+    .frame(width: 140, height: 120)
+    .animation(Theme.out(0.55), value: value)
   }
 
-  private func fill(_ stage: VeilModel.Stage) {
-    guard stage == .countdown else { return }
-    progress = 0
-    let seconds = Double(model.remaining)
-    DispatchQueue.main.async {
-      withAnimation(.linear(duration: seconds)) { progress = 1 }
-    }
+  private var shift: AnyTransition {
+    guard !reduceMotion else { return .opacity }
+    return .asymmetric(
+      insertion: AnyTransition.modifier(active: DigitShift(y: 50), identity: DigitShift(y: 0))
+        .animation(.timingCurve(0.22, 0.9, 0.3, 1, duration: 0.55)),
+      removal: AnyTransition.modifier(active: DigitShift(y: -50), identity: DigitShift(y: 0))
+        .animation(.timingCurve(0.5, 0, 0.9, 0.5, duration: 0.32)))
+  }
+}
+
+/// A digit on its way in or out: 42 % of its box away, a little smaller, blurred and clear.
+private struct DigitShift: ViewModifier {
+  let y: CGFloat
+
+  func body(content: Content) -> some View {
+    let away = y != 0
+    return content
+      .offset(y: y)
+      .scaleEffect(away ? 0.9 : 1)
+      .blur(radius: away ? 10 : 0)
+      .opacity(away ? 0 : 1)
   }
 }
 
@@ -841,9 +1092,9 @@ private struct Chip: View {
     switch dot {
     case .green:  // the camera light's color: it answers the question the light raises
       Circle()
-        .fill(Color(red: 0x3E / 255, green: 0xF0 / 255, blue: 0x7A / 255))
+        .fill(Theme.camera)
         .frame(width: 9, height: 9)
-        .shadow(color: Color(red: 0x3E / 255, green: 0xF0 / 255, blue: 0x7A / 255).opacity(0.8), radius: 4)
+        .shadow(color: Theme.camera.opacity(0.8), radius: 4)
     case .gray:
       Circle().fill(.white.opacity(0.4)).frame(width: 9, height: 9)
     case .recording(let pulse):

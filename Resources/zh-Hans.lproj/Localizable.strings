@@ -3,7 +3,6 @@
 /* Veil.swift */
 "Guarding starts in %ld s" = "%ld 秒后开始警戒";
 "Alarm raised" = "已报警";
-"Please don't touch. This Mac is guarded." = "请勿触碰，这台电脑正在警戒。";
 "Please don't touch" = "请勿触碰";
 "This Mac is guarded. Touching it sounds the alarm." = "这台电脑正在警戒，碰它会报警";
 "You're on camera. The owner has been notified." = "画面已录下，机主已收到通知";
@@ -13,9 +12,10 @@
 "Walking by isn't recorded. Touching it is." = "路过不会被录下，碰它才会录像";
 "Not recording this time" = "这次不会录像";
 "Recording" = "正在录像";
-"Walk away. Guarding starts in %ld s" = "离开吧，%ld 秒后开始警戒";
-"cancels · or rest a finger on Touch ID" = "取消 · 或把手指轻放在指纹键上";
 "Test mode: this run stays silent" = "测试模式：这次不出声";
+"Leave it lying still and walk away" = "放着别动，离开吧";
+"cancels" = "取消";
+"or rest a finger on Touch ID" = "或把手指放在触控 ID 上";
 /* The notice's footer is in the other language, for whoever does not read this one. */
 "PLEASE DO NOT TOUCH · PASSING BY IS NOT RECORDED" = "PLEASE DO NOT TOUCH · PASSING BY IS NOT RECORDED";
 "Test · silent" = "测试 · 不出声";
@@ -32,7 +32,7 @@
 "Turned off for BRB in System Settings" = "系统设置里关掉了 BRB 的摄像头权限";
 "Stay awake with the lid shut" = "合盖不睡眠";
 "Keeps guarding with the lid closed" = "合上盖子也继续警戒";
-"Needs an admin rule, installed once with your password" = "需要装一次管理员规则，输一次密码就好";
+"Needs an admin rule, installed once with your password" = "装一次管理员规则，需要你的密码";
 "Speakers" = "喇叭";
 "The siren plays on the built-in speakers" = "警笛从电脑自带的喇叭播放";
 "No built-in speakers found" = "找不到电脑自带的喇叭";
@@ -48,36 +48,28 @@
 "The system's lock function is unavailable" = "系统的锁屏功能不可用";
 "Off" = "关";
 "Phone page" = "手机页面";
-"After an alarm only" = "报警后才能看";
 "Recordings" = "录像";
-"Only around alarms · %ld" = "只录报警前后 · %ld";
 "Quit BRB" = "退出 BRB";
 "Ready" = "就绪";
-"Not ready" = "未就绪";
 "Checking…" = "检查中…";
-"Ready · %ld checks passed" = "就绪 · %ld 项检查通过";
-"1 thing to fix" = "还有 1 项要处理";
-"%ld things to fix" = "还有 %ld 项要处理";
+"1 thing to fix" = "还差 1 项";
+"%ld things to fix" = "还差 %ld 项";
 "Starting…" = "即将开始…";
 "Guarding" = "警戒中";
 "Start guarding" = "开始警戒";
 "Starts in 5 s · leave it lying still" = "5 秒后开始 · 放着别动";
-"See what's missing first" = "先看看还缺什么";
 "Note on the screen, e.g. Back in 10 min" = "屏幕上的留言，比如：10 分钟回来";
 "Siren volume" = "警笛音量";
-"Place" = "场景";
 "Test mode" = "测试模式";
 "Next run stays silent, then turns itself off" = "下一次不出声，之后自动关闭";
 "Frosted screen" = "磨砂屏幕";
 "Shows the notice on every screen while guarding" = "警戒时每块屏幕都显示提示";
 "Quiet table: a firm nudge or a lift sounds the alarm" = "安静的桌子：推一下或拿起来就报警";
 "Busy table: bumps are ignored, carrying it is not" = "热闹的桌子：轻碰不算，拿走才算";
-"Moving vehicle: only tilt, the lid, the charger and touch count" = "车上：只看倾斜、屏幕、电源和触碰";
+"Train or bus: shaking is ignored, tilting it is not" = "车上：晃动不算，倾斜才算";
 "Recent" = "最近";
-"This Mac is guarded" = "这台电脑正在警戒";
 "Rest a finger on Touch ID, or unlock the Mac, to stop" = "手指放在触控 ID 上，或解锁电脑，即可停止";
 "Before guarding" = "开始警戒之前";
-"Guarding starts once everything marked below is fixed." = "处理好下面标出的项目，就能开始警戒。";
 "Check again" = "重新检查";
 "optional" = "可选";
 "Open Settings" = "打开设置";
@@ -101,13 +93,49 @@
 "Before an alarm it only shows whether this Mac is guarded. After one it shows the camera, the photos and what happened." = "报警前只显示电脑是否在警戒。报警后能看到画面、照片和经过。";
 "The page can only watch. It can't control this Mac." = "这个页面只能看，不能控制电脑。";
 "Copy link" = "复制链接";
-"Tap again: the old link stops working" = "再点一次：旧链接会失效";
-"Reset link" = "重置链接";
+"Alarms reach your phone" = "报警会推送到手机";
+"Not on" = "未开启";
+"Locks the screen during an alarm" = "报警时会锁屏";
+"More" = "更多";
+"Open Recordings Folder" = "打开录像文件夹";
+"Hold ⌥ for a silent run" = "按住 ⌥ 静音试一次";
+"Fix the 1 above first" = "先处理上面这 1 项";
+"Fix the %ld above first" = "先处理上面这 %ld 项";
+"This run stays silent, then test mode turns off" = "这次不出声，之后测试模式自动关闭";
+"This run stays silent" = "这次不出声";
+"Clear" = "清除";
+"Show in Finder" = "在访达中显示";
+"New" = "新";
+"esc cancels too" = "按 esc 也能取消";
+"Cancel" = "取消";
+
+/* Settings.swift */
+"General" = "通用";
+"Phone" = "手机";
+"Checks" = "检查";
+"Preview" = "试听";
+"Three cards on what BRB does" = "用三张卡片介绍 BRB";
+"Show again" = "再看一遍";
+"Alerts" = "提醒";
+"New link made" = "已生成新链接";
+"Reset link…" = "重置链接…";
+"The old link stops working at once." = "旧链接会立即失效。";
+"Reset" = "重置";
+"Only around alarms" = "只录报警前后";
+"The 10 seconds before an alarm and what follows. Faces behind the person are blurred." = "报警前 10 秒和之后的画面，后面路过的人脸会打码。";
+"Kept for" = "保留";
+"7 days, 20 GB at most" = "7 天，最多 20 GB";
+"No recordings yet" = "还没有录像";
+"1 recording" = "1 段录像";
+"%ld recordings" = "%ld 段录像";
+"All set" = "一切就绪";
 
 /* GuardApp.swift */
 "The motion sensor stopped. The lid, the charger and touch still count." = "运动传感器停了。合盖、拔电源和触碰仍会报警。";
 "Stop guarding" = "解除警戒";
 "Not guarding" = "未在警戒";
+"Not guarding · a new alarm to look at" = "未在警戒 · 有新的报警待查看";
+"Settings…" = "设置…";
 
 /* Push.swift */
 "%@ · Siren on" = "%@ · 警笛已响";
@@ -125,7 +153,7 @@
 /* History.swift */
 "Ignored 1 bump" = "忽略了 1 次轻碰";
 "Ignored %ld bumps" = "忽略了 %ld 次轻碰";
-"%@, nobody touched it" = "%@，没人碰过";
+"Nobody touched it" = "没人碰过";
 "Welcome back" = "欢迎回来";
 "%@. Nobody touched it." = "%@，没人碰过它。";
 "All quiet" = "一切安静";
@@ -178,7 +206,6 @@
 
 /* First-run introduction */
 "Welcome to BRB" = "欢迎使用 BRB";
-"%ld of %ld" = "%ld / %ld";
 "Start it before you step away" = "离开前打开它";
 "Every screen frosts over and asks people not to touch. Lifting, tilting or closing the Mac, a key or a click sounds the alarm." = "每块屏幕都会变成磨砂玻璃，提醒别人不要碰。拿起、倾斜、合上电脑，或者按键、点击，都会报警。";
 "Walking by isn't recorded" = "路过不会被录下";
@@ -191,3 +218,7 @@
 "Try a silent run" = "静音试一次";
 "BRB asks for Accessibility and the camera on the way." = "过程中会请你允许辅助功能和摄像头。";
 "How it works" = "使用说明";
+"Later" = "以后再说";
+"in memory · 10 s" = "内存中 · 10 秒";
+"now" = "现在";
+"saved" = "已保存";

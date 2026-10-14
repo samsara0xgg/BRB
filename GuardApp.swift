@@ -68,6 +68,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private var phase = Phase.idle { didSet { persist(); render() } }
   private lazy var item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
   private let panel = Panel()
+  private lazy var settings = SettingsWindow(model: panel.model)
   private let veil = Veil()
   private var sensors: Sensors?
   private var motion = MotionDetector(), lid = LidDetector()
@@ -95,6 +96,19 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private var clip: URL?
   private var photos = 0
   private var latestPhoto: Data?
+  // The menu-bar shield between sessions (audit C5, D4).
+  /// The look it keeps while the notice flies back, so it changes as the notice lands.
+  private var parked: StatusIcon.Look?
+  private var parkToken = 0
+  /// Green with a tick for 1.6 s after the landing.
+  private var landing = false
+  private var landingToken = 0
+  private var iconScale: CGFloat = 1
+  /// A cancel pours the amber back out: the arming level falling to zero.
+  private var drainLevel = 0.0
+  private var iconTimer: Timer?
+  /// A real alarm the owner hasn't looked at yet: a red dot until the panel shows it.
+  private var unseen = false
 
   func applicationDidFinishLaunching(_ note: Notification) {
     GuardApp.moveOldFolders()
@@ -127,8 +141,29 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     item.button?.target = self
     item.button?.action = #selector(statusClicked)
     item.button?.setAccessibilityLabel("BRB")
-    panel.model.onArm = { [weak self] in self?.arm() }
+    panel.anchor = { [weak self] in self?.item.button }
+    let m = panel.model
+    m.onArm = { [weak self] silentOnce in self?.arm(silentOnce: silentOnce) }
+    m.onCancel = { [weak self] in self?.disarm(.escape) }
+    m.onSettings = { [weak self] tab in self?.showSettings(tab) }
+    m.onIntro = { [weak self] in
+      self?.settings.close()
+      self?.panel.show(intro: true)
+    }
+    m.onSeen = { [weak self] in
+      guard let self, unseen else { return }
+      unseen = false
+      render()
+    }
+    // A permission granted in System Settings: back to the panel, where its row ticks off.
+    m.onReopen = { [weak self] in
+      guard let self, phase == .idle, !settings.isVisible else { return }
+      panel.show()
+    }
     veil.onRebuild = { [weak self] in self?.listenForFinger() }
+    veil.onLanded = { [weak self] in self?.landed() }
+    unseen = History.load().contains { $0.alarmed && !$0.test && $0.ended > Prefs.alarmsSeenAt }
+    installMenu()
     watchPower()
     Recorder.prune()
     render()
@@ -136,8 +171,8 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     openAtLogin()
     if !Prefs.introSeen && phase == .idle {  // first launch: a menu-bar app is easy to miss
       DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-        guard let self, phase == .idle, !panel.isShown, let button = item.button else { return }
-        panel.toggle(from: button)
+        guard let self, phase == .idle, !panel.isShown else { return }
+        panel.show()
       }
     }
   }
@@ -146,7 +181,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   /// Opening BRB again from Applications or Launchpad shows the panel: a menu-bar app has no
   /// window, and otherwise nothing would happen.
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-    if !panel.isShown, let button = item.button { panel.toggle(from: button) }
+    if !panel.isShown { panel.show() }
     return false
   }
 
@@ -163,15 +198,52 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   }
 
   @objc private func statusClicked() {
-    guard let button = item.button else { return }
-    panel.toggle(from: button)
+    panel.toggle()
+  }
+
+  @objc private func openSettings() {
+    showSettings(.general)
+  }
+
+  /// Settings is for when nothing runs: the panel steps aside for the window.
+  private func showSettings(_ tab: SettingsTab) {
+    guard phase == .idle else { return }
+    panel.close()
+    settings.show(tab)
+  }
+
+  /// A menu-bar app shows no menu bar of its own, but its windows still need the usual keys: ⌘, for
+  /// Settings, ⌘W, ⌘Q, and copy and paste in the text fields.
+  private func installMenu() {
+    let app = NSMenu()
+    app.addItem(withTitle: L("Settings…"), action: #selector(openSettings), keyEquivalent: ",").target = self
+    app.addItem(.separator())
+    app.addItem(withTitle: L("Quit BRB"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+    let edit = NSMenu(title: "Edit")
+    edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+    edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z").keyEquivalentModifierMask = [.command, .shift]
+    edit.addItem(.separator())
+    edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+    edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+    edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+    edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+    let window = NSMenu(title: "Window")
+    window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+    let main = NSMenu()
+    for menu in [app, edit, window] {
+      let holder = NSMenuItem()
+      holder.submenu = menu
+      main.addItem(holder)
+    }
+    NSApp.mainMenu = main
   }
 
   // MARK: arming
 
-  private func arm() {
+  /// `silentOnce`: ⌥ was held on the start button, so this run is a test without test mode.
+  private func arm(silentOnce: Bool = false) {
     guard phase == .idle else { return }
-    test = Prefs.testMode
+    test = Prefs.testMode || silentOnce
     Alarm.silent = test
     armedAt = Date()
     progress = 0
@@ -182,22 +254,30 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     clip = nil
     photos = 0
     latestPhoto = nil
+    parked = nil
+    landing = false
+    stopIconAnimation()
+    settings.close()
     Recorder.prune()
     phase = .arming
     setSleepDisabled(true)
     startWatching()
     let seconds = GuardApp.countdownSeconds
+    let start = Date()
+    panel.model.countdownFrom = start
+    panel.model.remaining = Int(seconds)
     if Prefs.veil {
       veil.countdown(Int(seconds))
     }
     listenForFinger()
-    log("arming, \(Int(seconds)) s countdown\(test ? ", test mode" : ""), \(Prefs.place.rawValue)")
-    let start = Date()
-    let t = Timer(timeInterval: 0.1, repeats: true) { [weak self] timer in
+    log("arming, \(Int(seconds)) s countdown\(test ? silentOnce ? ", silent once" : ", test mode" : ""), \(Prefs.place.rawValue)")
+    // 30 times a second, so the amber rises smoothly in the menu bar.
+    let t = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] timer in
       guard let self, phase == .arming else { timer.invalidate(); return }
       let elapsed = Date().timeIntervalSince(start)
       let remaining = max(1, Int((seconds - elapsed).rounded(.up)))
       if veil.model.remaining != remaining { veil.model.remaining = remaining }
+      if panel.model.remaining != remaining { panel.model.remaining = remaining }
       progress = min(1, elapsed / seconds)
       render()
       if elapsed >= seconds {
@@ -298,6 +378,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     lid.baseline()
     armedOnAC = GuardApp.onAC()
     phase = .armed
+    panel.close()  // from here a click is a touch
     veil.armed()
     live.update { $0.phase = "armed" }
     live.event("armed", Prefs.place.rawValue)
@@ -464,13 +545,16 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private func disarm(_ how: Disarm, exiting: Bool = false) {
     guard phase != .idle else { return }
     let was = phase
+    let guarded = was == .armed || was == .triggered
+    // The shield keeps its look until the notice lands in it; a real alarm leaves a red dot.
+    if guarded && !exiting && veil.isUp { park(shieldLook()) }
+    if guarded && trigger != nil && !test { unseen = true }
     phase = .idle
     let now = Date()
     let session = Session(armed: armedAt, ended: now, trigger: trigger, triggeredAt: trigger == nil ? nil : triggeredAt, disarm: how,
                           bumps: motion.bumps, softSeconds: softFrom.map { Int((sirenFrom ?? now).timeIntervalSince($0)) } ?? 0,
                           sirenSeconds: sirenFrom.map { Int(now.timeIntervalSince($0)) } ?? 0, photos: photos,
                           clip: clip?.lastPathComponent, test: test)
-    let guarded = was == .armed || was == .triggered
     if guarded || how == .sensorsSilent { History.add(session) }
     // Test mode covers one run, then turns itself off (audit H1).
     if test && guarded { Prefs.testMode = false }
@@ -484,9 +568,11 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     stopWatching(exiting: exiting)
     if !exiting {
       if guarded {
-        veil.welcome(session.welcome, toward: item.button?.window?.frame)
+        veil.welcome(session.welcome, toward: item.button?.window?.frame)  // lands at once when the veil is down
       } else {
         veil.cancel()
+        drain(from: progress)
+        panel.model.refresh()  // a countdown cancelled from the panel: it goes back to the start button
       }
     }
     log("disarmed: \(how.rawValue)")
@@ -614,21 +700,93 @@ final class GuardApp: NSObject, NSApplicationDelegate {
 
   // MARK: menu bar
 
-  private func render() {
-    let look: StatusIcon.Look = switch phase {
-    case .idle: .idle
-    case .arming: .arming(progress)
-    case .armed: test ? .test : (degraded || recorder == nil) ? .partial : .armed
-    case .triggered: .alarm
+  /// While a session runs, its phase. Between sessions: the look it waits in for the notice, the
+  /// green tick of the landing, the amber pouring out of a cancel, or the outline, with a red dot
+  /// for an alarm nobody has looked at yet.
+  private func shieldLook() -> StatusIcon.Look {
+    switch phase {
+    case .arming: return .arming(progress)
+    case .armed: return test ? .test : (degraded || recorder == nil) ? .partial : .armed
+    case .triggered: return .alarm
+    case .idle:
+      if let parked { return parked }
+      if landing { return .clear }
+      if drainLevel > 0 { return .arming(drainLevel) }
+      return unseen ? .badge : .idle
     }
+  }
+
+  private func render() {
     let tip = switch phase {
-    case .idle: L("Not guarding")
+    case .idle: unseen ? L("Not guarding · a new alarm to look at") : L("Not guarding")
     case .arming: L("Starting…")
     case .armed: L("Guarding")
     case .triggered: L("Alarm raised")
     }
-    item.button?.image = StatusIcon.image(look)
+    item.button?.image = StatusIcon.image(shieldLook(), scale: phase == .idle && landing ? iconScale : 1)
     item.button?.toolTip = tip
     if panel.model.phase != phase { panel.model.phase = phase }
+  }
+
+  /// Holds `look` until the notice lands, and never longer than its flight could take.
+  private func park(_ look: StatusIcon.Look) {
+    parked = look
+    parkToken += 1
+    let token = parkToken
+    DispatchQueue.main.asyncAfter(deadline: .now() + 6.5) { [weak self] in
+      guard let self, parkToken == token, parked != nil, phase == .idle else { return }
+      landed()
+    }
+  }
+
+  /// The notice reached the shield: green with a tick and a bounce, then the outline 1.6 s later.
+  private func landed() {
+    parked = nil
+    landing = true
+    landingToken += 1
+    let token = landingToken
+    if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+      iconScale = 1
+      render()
+    } else {
+      animateIcon(0.62) { [weak self] p in self?.iconScale = StatusIcon.pop(p) }
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+      guard let self, landingToken == token else { return }
+      landing = false
+      iconScale = 1
+      render()
+    }
+  }
+
+  /// A cancel pours the amber back out of the shield, as the ring unwinds (audit C6).
+  private func drain(from level: Double) {
+    guard level > 0, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+    animateIcon(0.45) { [weak self] p in self?.drainLevel = p >= 1 ? 0 : level * (1 - Ease.retreat(p)) }
+  }
+
+  /// Runs `frame` from 0 to 1 over `seconds`, redrawing the shield 60 times a second.
+  private func animateIcon(_ seconds: Double, _ frame: @escaping (Double) -> Void) {
+    iconTimer?.invalidate()
+    let start = CACurrentMediaTime()
+    frame(0)
+    render()
+    let t = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] timer in
+      let p = min(1, (CACurrentMediaTime() - start) / seconds)
+      frame(p)
+      self?.render()
+      guard p >= 1 else { return }
+      timer.invalidate()
+      if self?.iconTimer === timer { self?.iconTimer = nil }
+    }
+    RunLoop.main.add(t, forMode: .common)
+    iconTimer = t
+  }
+
+  private func stopIconAnimation() {
+    iconTimer?.invalidate()
+    iconTimer = nil
+    iconScale = 1
+    drainLevel = 0
   }
 }
