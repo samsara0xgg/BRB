@@ -16,7 +16,7 @@ BRB 是把 MacBook 留在图书馆或咖啡馆桌上时用的菜单栏小工具�
 2. **静音试一次。** 过程中会请你允许辅助功能（用来发现键盘和触控板被碰）和摄像头；还缺什么，面板会列出来，每一项都有修复按钮。合上盖子也不睡眠需要一条管理员规则，输一次密码就装好。
 3. **等屏幕变成磨砂后碰一下触控板**：屏幕会像陌生人碰到时那样泛红并锁屏，只是不出声。解锁或把手指放在触控 ID 上就能停下。测试模式用完会自动关闭。
 
-面板底部的 **使用说明** 可以再看一遍卡片。想删掉 BRB：在面板里退出，把它拖进废纸篓，再运行 `sudo rm /etc/sudoers.d/brb` 删掉那条规则。录像留在 `~/Movies/BRB/`，日志在 `~/Library/Logs/brb.log`。
+面板右上角的齿轮打开设置，里面的 **使用说明** 可以再看一遍卡片。想删掉 BRB：在设置里退出，把它拖进废纸篓，再运行 `sudo rm /etc/sudoers.d/brb` 删掉那条规则。录像留在 `~/Movies/BRB/`，日志在 `~/Library/Logs/brb.log`。
 
 ### 从源码安装
 
@@ -126,4 +126,4 @@ cd BRB
 launchctl bootout gui/$(id -u)/com.allen.guard-mode
 ```
 
-`./install.sh` 可以再装回来，`./uninstall.sh` 会彻底卸掉。装在「应用程序」里的那份，用 `pkill -TERM -x brb` 效果和 `bootout` 一样。如果合盖后电脑还是不睡，运行 `sudo pmset -a disablesleep 0`。面板里的退出只在没有警戒时可用。
+`./install.sh` 可以再装回来，`./uninstall.sh` 会彻底卸掉。装在「应用程序」里的那份，用 `pkill -TERM -x brb` 效果和 `bootout` 一样。如果合盖后电脑还是不睡，运行 `sudo pmset -a disablesleep 0`。设置（连同里面的退出）只在没有警戒时能打开。

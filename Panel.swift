@@ -6,8 +6,8 @@ import LocalAuthentication
 import SwiftUI
 
 /// The menu-bar panel holds only what matters before stepping away (audit A1): the start button,
-/// where the Mac is, a note for the screen and the last few sessions, with what is on in the ⋯
-/// menu. Anything missing is listed on top and fixed in place (A2); everything else lives in Settings.
+/// where the Mac is, a note for the screen and the last few sessions, and a gear for Settings. Anything
+/// missing is listed on top and fixed in place (A2); everything else lives in Settings.
 final class Panel: NSObject, NSPopoverDelegate {
   let model: PanelModel
   /// The menu-bar button the panel hangs from.
@@ -722,7 +722,7 @@ private struct MainPage: View {
   }
 }
 
-/// The tile, the name, one status chip and the ⋯ menu (audit A3).
+/// The tile, the name, one status chip and the gear (audit A3).
 private struct Header: View {
   @ObservedObject var model: PanelModel
   var title = "BRB"
@@ -739,7 +739,7 @@ private struct Header: View {
       }
       Spacer(minLength: 6)
       if showsStatus && model.phase == .idle {
-        MoreButton(model: model)
+        SettingsButton(model: model)
       }
     }
     .frame(height: 28)
@@ -868,51 +868,30 @@ func replay(_ animation: Animation, _ set: @escaping (Bool) -> Void) {
   }
 }
 
-/// ⋯: Settings, how it works, the recordings, quit. A native menu, with its shortcuts and an icon on
-/// every item. What is on lives in the Ready chip's tooltip and Settings' Checks: read-only rows in a
-/// menu can only be drawn dimmed, and they read as broken buttons.
-private struct MoreButton: View {
+/// The gear: one click opens Settings (⌘, too). It used to be ⋯ with a native menu of four items;
+/// how it works, the recordings folder and quitting all live in Settings now (allen: one click,
+/// and the system menu looked out of place). The gear turns a little under the pointer.
+private struct SettingsButton: View {
   @ObservedObject var model: PanelModel
   @State private var hover = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
-    Button(action: show) {
-      Image(systemName: "ellipsis")
-        .font(.system(size: 13, weight: .semibold))
+    Button { model.onSettings(.general) } label: {
+      Image(systemName: "gearshape")
+        .font(.system(size: 13, weight: .medium))
+        .rotationEffect(.degrees(hover && !reduceMotion ? 45 : 0))
         .foregroundStyle(hover ? Color.primary : Color.secondary)
         .frame(width: 26, height: 26)
         .background(Circle().fill(hover ? Theme.fill : Color.clear))
         .contentShape(Circle())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(Pressable(scale: 0.9))
     .onHover { hover = $0 }
-    .help(L("More"))
-    .accessibilityLabel(L("More"))
+    .animation(.spring(duration: 0.45, bounce: 0.3), value: hover)
+    .help(L("Settings…"))
+    .accessibilityLabel(L("Settings…"))
   }
-
-  private func show() {
-    let menu = NSMenu()
-    func item(_ symbol: String, _ title: String, _ key: String = "", _ run: @escaping () -> Void) {
-      let action = MenuAction(run)
-      let i = NSMenuItem(title: title, action: #selector(MenuAction.fire), keyEquivalent: key)
-      i.target = action
-      i.representedObject = action  // the item keeps its action alive
-      i.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-      menu.addItem(i)
-    }
-    item("gearshape", L("Settings…"), ",") { model.onSettings(.general) }
-    item("questionmark.circle", L("How it works")) { model.showIntro() }
-    item("folder", L("Open Recordings Folder")) { model.reveal(nil) }
-    menu.addItem(.separator())
-    item("power", L("Quit BRB"), "q") { NSApp.terminate(nil) }
-    menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
-  }
-}
-
-final class MenuAction: NSObject {
-  let run: () -> Void
-  init(_ run: @escaping () -> Void) { self.run = run }
-  @objc func fire() { run() }
 }
 
 /// "Before guarding": only what is missing, each with the button that fixes it.
