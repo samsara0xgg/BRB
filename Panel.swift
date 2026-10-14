@@ -335,8 +335,8 @@ final class PanelModel: ObservableObject {
 
   func check(_ id: Check.ID) -> Check? { checks.first { $0.id == id } }
 
-  /// What is on, for the ⋯ menu and the status chip's tooltip. Read-only: only "Settings…" opens
-  /// Settings (Allen, 2026-10-14).
+  /// What is on, for the status chip's tooltip. Read-only: only "Settings…" opens Settings
+  /// (Allen, 2026-10-14).
   var statusRows: [(symbol: String, title: String, on: Bool)] {
     [("video", L("Camera"), check(.camera)?.ok == true),
      ("iphone", L("Phone alerts"), pushOn),
@@ -745,7 +745,7 @@ private struct Header: View {
     .frame(height: 28)
   }
 
-  /// The ⋯ menu's status rows again, for whoever points at the chip.
+  /// What is on, for whoever points at the chip.
   private var statusTip: String {
     guard model.phase == .idle else { return "" }
     return model.statusRows.map { row in row.title + " · " + (row.on ? L("On") : L("Off")) }.joined(separator: "\n")
@@ -868,8 +868,9 @@ func replay(_ animation: Animation, _ set: @escaping (Bool) -> Void) {
   }
 }
 
-/// ⋯: what is on (read-only, as the Battery menu shows its power source), then Settings, how it
-/// works, the recordings, quit. A native menu, with its shortcuts and an icon on every item.
+/// ⋯: Settings, how it works, the recordings, quit. A native menu, with its shortcuts and an icon on
+/// every item. What is on lives in the Ready chip's tooltip and Settings' Checks: read-only rows in a
+/// menu can only be drawn dimmed, and they read as broken buttons.
 private struct MoreButton: View {
   @ObservedObject var model: PanelModel
   @State private var hover = false
@@ -891,13 +892,6 @@ private struct MoreButton: View {
 
   private func show() {
     let menu = NSMenu()
-    for row in model.statusRows {
-      let i = NSMenuItem(title: row.title, action: nil, keyEquivalent: "")  // no action: shown, not chosen
-      i.image = NSImage(systemSymbolName: row.symbol, accessibilityDescription: nil)
-      i.badge = NSMenuItemBadge(string: row.on ? L("On") : L("Off"))
-      menu.addItem(i)
-    }
-    menu.addItem(.separator())
     func item(_ symbol: String, _ title: String, _ key: String = "", _ run: @escaping () -> Void) {
       let action = MenuAction(run)
       let i = NSMenuItem(title: title, action: #selector(MenuAction.fire), keyEquivalent: key)

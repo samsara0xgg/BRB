@@ -197,7 +197,7 @@ func selftest(hardware: Bool) {
   missing.checks = Preflight.checks(Preflight.Facts(sleep: false))
   missing.pushOn = true
   check(missing.locked && missing.toFix == 1, "lid rule missing: start button locked, 1 to fix")
-  check(missing.statusRows.map { $0.on } == [true, true, false, true], "the ⋯ menu's status: camera, phone alerts, lid shut, Touch ID")
+  check(missing.statusRows.map { $0.on } == [true, true, false, true], "the Ready chip's status: camera, phone alerts, lid shut, Touch ID")
   check(Ease.fog(0) == 0 && Ease.fog(1) == 1 && Ease.fog(0.5) > 0.5 && Ease.melt(0.25) < Ease.melt(0.75), "timing curves")
 
   let dir = FileManager.default.temporaryDirectory.appendingPathComponent("brb-selftest-\(getpid())")
