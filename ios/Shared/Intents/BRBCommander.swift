@@ -4,10 +4,10 @@ import WidgetKit
 // MARK: - Pro
 
 enum BRBGate {
-  /// Widgets, the Dynamic Island and remote commands are BRB Pro features (the comparison table's rows
-  /// "Stop siren, disarm, start remotely" and "Dynamic Island, widgets"). `Prefs.pro` is the cached purchase
-  /// check. Set this to false to let everybody use them.
-  static let enforced = true
+  /// Widgets, the Dynamic Island, and stopping, hushing or starting from a distance are free; BRB Pro is cloud
+  /// video, 30 days of history and the Apple Watch. Flip this to true to lock the widgets and remote commands
+  /// behind `Prefs.pro` (the cached purchase check) again.
+  static let enforced = false
   static var unlocked: Bool { !enforced || Prefs.pro }
 }
 

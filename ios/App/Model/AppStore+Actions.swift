@@ -25,7 +25,7 @@ extension AppStore {
   func macChanged(_ mac: MacModel, from oldLook: Look?) {
     guard let oldLook, oldLook != mac.look else { return }
     if !isDemo {
-      WidgetCenter.shared.reloadAllTimelines()
+      BRBWidgetRefresh.reload()
       liveActivities.update(for: mac)
     }
     if mac.look == .alarm || mac.look == .warn, !oldLook.isAlarm {
@@ -87,18 +87,26 @@ extension AppStore {
 
   // MARK: Links
 
-  /// `brb://pair?c=<code>&h=<host>` pairs; `brb://mac/<id>` (from a widget) opens that Mac, or its alarm.
+  /// `brb://pair?c=<code>&h=<host>` pairs. The widgets and the Live Activity open `brb://mac/<id>`, `brb://alarm/<id>`,
+  /// `brb://add` and `brb://pro`.
   func open(url: URL) {
     if let code = PairingCode.parse(url.absoluteString) {
       onboarding = Onboarding(step: .scan, extra: Prefs.onboarded || !macs.isEmpty)
       Task { await claim(code) }
       return
     }
-    guard url.scheme == "brb", url.host == "mac" else { return }
-    let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
-    let q = Dictionary(uniqueKeysWithValues: (comps?.queryItems ?? []).compactMap { i in i.value.map { (i.name, $0) } })
-    let id = q["id"] ?? url.lastPathComponent
-    route(toMac: id, alarm: q["alarm"] == "1")
+    switch BRBDeepLink.parse(url) {
+    case .mac(let id): route(toMac: id, alarm: false)
+    case .alarm(let id): route(toMac: id, alarm: true)
+    case .addMac: onboarding = Onboarding(step: .scan, extra: true)
+    case .pro: sheet = .paywall
+    case nil:
+      // `brb://mac?id=<id>&alarm=1`, the older shape.
+      guard url.scheme == "brb", url.host == "mac" else { return }
+      let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+      let q = Dictionary(uniqueKeysWithValues: (comps?.queryItems ?? []).compactMap { i in i.value.map { (i.name, $0) } })
+      route(toMac: q["id"] ?? url.lastPathComponent, alarm: q["alarm"] == "1")
+    }
   }
 
   // MARK: Launch arguments (demo, screenshots)

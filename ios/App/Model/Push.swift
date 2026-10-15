@@ -60,10 +60,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     let hush = UNNotificationAction(identifier: NotificationIDs.hush, title: t("lp_stop"), options: [])
     let open = UNNotificationAction(identifier: NotificationIDs.open, title: t("lp_open"), options: [.foreground])
     let stop = UNNotificationAction(identifier: NotificationIDs.stopGuard, title: t("lp_stopGuard"), options: [.authenticationRequired])
-    center.setNotificationCategories([
+    var categories: Set<UNNotificationCategory> = [
       UNNotificationCategory(identifier: NotificationIDs.alarmCategory, actions: [hush, open], intentIdentifiers: [], options: []),
       UNNotificationCategory(identifier: NotificationIDs.guardCategory, actions: [stop], intentIdentifiers: [], options: []),
-    ])
+    ]
+    // The reminder for leaving a Mac unguarded ("Start guarding" and "Open").
+    categories.formUnion(BRBNotificationActions.categories().filter { $0.identifier == BRBNotificationActions.remindCategory })
+    center.setNotificationCategories(categories)
     WatchBridge.shared.start()
     if !AppStore.shared.isDemo { application.registerForRemoteNotifications() }
     return true
@@ -116,6 +119,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         await store.hush(mac)
       case NotificationIDs.stopGuard:
         await store.send(.stop, to: mac)
+      case BRBNotificationActions.startID:
+        _ = await BRBNotificationActions.handle(actionIdentifier: action, userInfo: info)
       default:
         store.route(toMac: id, alarm: response.notification.request.content.categoryIdentifier == NotificationIDs.alarmCategory)
       }

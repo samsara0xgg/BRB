@@ -108,6 +108,11 @@ targets:
     sources:
       - path: NotificationService
       - path: Shared/Core
+    # The group lets it read a Mac's own relay host and keep the alarm photo for the Live Activity.
+    entitlements:
+      path: NotificationService/BRBNotifications.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.allen.brb]
     info:
       path: .generated/BRBNotifications-Info.plist
       properties:
@@ -126,7 +131,8 @@ targets:
     platform: watchOS
     sources:
       - path: Watch
-      - path: Shared
+      - path: Shared/Core
+      - path: Shared/UI
       - path: Resources
     dependencies:
       - target: BRBWatchWidgets
