@@ -128,6 +128,12 @@ targets:
       - path: Watch
       - path: Shared
       - path: Resources
+    dependencies:
+      - target: BRBWatchWidgets
+    entitlements:
+      path: Watch/BRBWatch.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.allen.brb]
     info:
       path: .generated/BRBWatch-Info.plist
       properties:
@@ -141,6 +147,31 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.allen.brb.watchkitapp
         TARGETED_DEVICE_FAMILY: "4"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SKIP_INSTALL: YES
+
+  # The Watch complication. It shares the Watch app's app group to read the paired Macs.
+  BRBWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: WatchWidgets
+      - path: Shared/Core
+      - path: Shared/UI
+      - path: Resources
+    entitlements:
+      path: WatchWidgets/BRBWatchWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.allen.brb]
+    info:
+      path: .generated/BRBWatchWidgets-Info.plist
+      properties:
+        CFBundleDisplayName: BRB
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.allen.brb.watchkitapp.widgets
+        TARGETED_DEVICE_FAMILY: "4"
         SKIP_INSTALL: YES
 
   BRBTests:
