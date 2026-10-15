@@ -90,6 +90,10 @@ changes (and the battery at most every 5 minutes). The relay's hibernating socke
   "state": { ...as above without pass... }, "photos": [<ms>, ...] }
 ```
 
+`GET /state/<id>?t=<token>` returns the same JSON as the first frame (`200`, `{"v":3,"level":...}`; `403` for an unknown
+token, `404` for an unknown room, with the same level rules). Widgets, the Watch and background refreshes use it
+instead of a socket; `Cache-Control: no-store`, CORS open.
+
 `photos` lists photo times (newest first) the level may see. Binary frames are camera JPEGs, sent only
 while `phase` is `triggered` and the level is `owner` or `pass`. A viewer also receives
 `{"ack": {"id": "<cmd id>", "ok": true|false, "why": "<reason>"}}` for commands it sent.
