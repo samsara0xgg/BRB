@@ -60,6 +60,7 @@ targets:
         NSSupportsLiveActivitiesFrequentUpdates: true
         NSCameraUsageDescription: The camera only reads the code on your Mac. Nothing is photographed or recorded.
         NSFaceIDUsageDescription: Confirms it's you before you disarm an alarm or stop guarding.
+        NSPhotoLibraryAddUsageDescription: Saves the photos of an alarm and the cards you share to your Photos.
         ITSAppUsesNonExemptEncryption: false
         LSApplicationQueriesSchemes: []
         CFBundleURLTypes:

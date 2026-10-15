@@ -8,7 +8,7 @@ final class DemoBackend: Backend {
   let isDemo = true
 
   /// A scene to start in, by name (`-scene alarm-siren`).
-  enum Scene: String {
+  enum Scene: String, CaseIterable {
     case idle, arming, armed, partial, test, warn, siren, back, muted, offline, offlineAlarm, done, empty
   }
 

@@ -93,6 +93,9 @@ enum Fmt {
 
   static func fullDate(_ ms: Ms) -> String { formatter("yMMMd").string(from: ms.date) }
 
+  /// "Tuesday, October 7" for a card or a report.
+  static func dateLong(_ ms: Ms) -> String { formatter("EEEEMMMMd").string(from: ms.date) }
+
   /// "2 hours" / "2 小时" for the share card.
   static func hours(_ h: Int) -> String { tn("hrs", h) }
 }

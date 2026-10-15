@@ -146,6 +146,7 @@ enum EventText {
       }
     case "lift": return t("ev_relift")
     case "photo": return t("ev_photo")
+    case "bump": return t("ev_bump")
     case "siren": return t("ev_siren")
     case "back": return t("ev_back")
     case "hushed": return t("ev_hush")
