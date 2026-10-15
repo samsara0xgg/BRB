@@ -147,8 +147,8 @@ enum MacInfo {
 
   /// The Mac card of the state, with the battery as it is now.
   static func card() -> LiveState.Mac {
-    let battery = battery()
-    return LiveState.Mac(name: name, model: model, batt: battery?.percent, chg: battery?.charging ?? false)
+    let charge = battery()
+    return LiveState.Mac(name: name, model: model, batt: charge?.percent, chg: charge?.charging ?? false)
   }
 }
 
