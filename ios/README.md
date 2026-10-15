@@ -22,6 +22,7 @@ device. The bundle ids are `com.allen.brb` (app), `.widgets`, `.notifications`, 
 | `Widgets/` | Home and lock screen widgets, the Live Activity and Dynamic Island, the Control Center control, App Intents. |
 | `NotificationService/` | Adds the photo to an alarm notification. |
 | `Watch/`, `WatchWidgets/` | The Apple Watch app and its complication. |
+| `Gallery/` | `BRBGallery`, a scheme that draws the widgets, the Live Activity and the Dynamic Island in a plain app, for screenshots. Not shipped. |
 | `Resources/` | `Localizable.strings` and `.stringsdict` in English and Simplified Chinese, plus `Widgets` and `Watch` tables. |
 | `Tests/` | Unit tests for the Core. |
 
@@ -37,6 +38,10 @@ Other launch arguments, all harmless in a normal launch:
 - `-open mac|alarm|records|record|settings|privacy|faq|start|paywall|share|evidence|sendlink`
 - `-onb welcome|notif|crit|scan|code|paired|done|camdenied|expired|macoffline|nomac`
 - `-pstate loading|error|empty|offline`, `-pro 1`, `-notifOff 1`
+- The Watch app: `-wdemo idle|armed|arming|warn|siren|offline|done|many|nopro|empty`
+- The gallery app: `-page home1|home2|home3|lock|live1|live2|island1|island2|island3`, `-dark 0`
+
+`scripts/shots.sh` (iPhone, widgets) and `scripts/watch-shots.sh` take a screenshot of each of these in the simulator.
 
 ## Before the App Store
 
