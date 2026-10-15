@@ -28,8 +28,20 @@ jobs:
           xcodebuild -project BRB.xcodeproj -scheme BRB -configuration Debug \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath "$RUNNER_TEMP/dd" \
             CODE_SIGNING_ALLOWED=NO build 2>&1 | grep -E "error:|BUILD (SUCCEEDED|FAILED)" | sort -u | head -80
+      - name: Build the widget gallery
+        continue-on-error: true
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project BRB.xcodeproj -scheme BRBGallery -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | grep -E "error:|BUILD (SUCCEEDED|FAILED)" | sort -u | head -80
       - name: Take the screenshots
-        run: ios/scripts/shots.sh "$RUNNER_TEMP/dd/Build/Products/Debug-iphonesimulator/BRB.app" "$RUNNER_TEMP/shots"
+        run: |
+          products="$RUNNER_TEMP/dd/Build/Products/Debug-iphonesimulator"
+          gallery="$products/BRBGallery.app"
+          [ -d "$gallery" ] || gallery=""
+          ios/scripts/shots.sh "$products/BRB.app" "$RUNNER_TEMP/shots" "$gallery"
       - uses: actions/upload-artifact@v4
         with:
           name: screenshots

@@ -378,7 +378,7 @@ struct AlarmMedia: View {
             .saturation(offline ? 0 : 1)
             .brightness(offline ? -0.3 : 0)
             .animation(.spring(response: 0.45, dampingFraction: 0.85), value: zoom)
-        } else {
+        } else if !offline {
           VStack(spacing: 8) {
             ProgressView().tint(.white)
             Text(t("live")).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white.opacity(0.6))

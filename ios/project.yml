@@ -180,6 +180,27 @@ targets:
         TARGETED_DEVICE_FAMILY: "4"
         SKIP_INSTALL: YES
 
+  # Not shipped: the widgets and the Live Activity drawn inside a plain app, so CI can take screenshots of them.
+  BRBGallery:
+    type: application
+    platform: iOS
+    sources:
+      - path: Gallery
+      - path: Widgets
+        excludes: [BRBWidgets.swift, BRBControl.swift, BRBWidgets.entitlements]
+      - path: Shared
+      - path: Resources
+    info:
+      path: .generated/BRBGallery-Info.plist
+      properties:
+        CFBundleDisplayName: BRB Gallery
+        UILaunchScreen:
+          UIImageRespectsSafeAreaInsets: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.allen.brb.gallery
+        TARGETED_DEVICE_FAMILY: "1"
+
   BRBTests:
     type: bundle.unit-test
     platform: iOS

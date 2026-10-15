@@ -1,10 +1,11 @@
 #!/bin/bash
 # Screenshots of the demo scenes in the iOS simulator, for checking the screens against the prototype.
-#   ios/scripts/shots.sh path/to/BRB.app out-dir
+#   ios/scripts/shots.sh path/to/BRB.app out-dir [path/to/BRBGallery.app]
 # The app is launched in demo mode (see LaunchOptions.swift): no Mac, no relay, no permission prompts.
 set -u
 APP="$1"
 OUT="$2"
+GALLERY="${3:-}"
 mkdir -p "$OUT"
 BUNDLE=com.allen.brb
 
@@ -82,6 +83,27 @@ shot zh-records -scene done -open records "${ZH[@]}"
 shot zh-settings -scene armed -open settings "${ZH[@]}"
 shot zh-paywall -scene idle -open paywall "${ZH[@]}"
 shot zh-onb-welcome -scene empty -onb welcome "${ZH[@]}"
+
+# The widgets, the Live Activity and the Dynamic Island, drawn by the gallery app.
+if [ -n "$GALLERY" ]; then
+  xcrun simctl install "$UDID" "$GALLERY"
+  gshot() {
+    local name="$1"
+    shift
+    xcrun simctl terminate "$UDID" com.allen.brb.gallery >/dev/null 2>&1
+    xcrun simctl launch "$UDID" com.allen.brb.gallery -page "$name" "$@" >/dev/null || { echo "launch failed: $name"; return; }
+    sleep 3
+    xcrun simctl io "$UDID" screenshot --type=png "$OUT/w-$name.png" >/dev/null 2>&1 || echo "shot failed: $name"
+    echo "shot w-$name"
+  }
+  for page in home1 home2 home3 lock live1 live2 island1 island2 island3; do gshot "$page"; done
+  gshot home1 -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN
+  mv "$OUT/w-home1.png" "$OUT/w-zh-home1.png" 2>/dev/null
+  gshot live1 -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN
+  mv "$OUT/w-live1.png" "$OUT/w-zh-live1.png" 2>/dev/null
+  gshot home1 -dark 0
+  mv "$OUT/w-home1.png" "$OUT/w-light-home1.png" 2>/dev/null
+fi
 
 # Smaller JPEGs, so a few dozen fit in a branch.
 for f in "$OUT"/*.png; do
