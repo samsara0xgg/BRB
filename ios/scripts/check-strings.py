@@ -23,8 +23,14 @@ def plural_keys(path):
 def args(s):
     return sorted(re.sub(r'\d+\$', '', a) for a in re.findall(r'%(?:\d+\$)?(?:ld|lu|d|@|f|\.\d+f)', s))
 
-en = table('Resources/en.lproj/Localizable.strings')
-zh = table('Resources/zh-Hans.lproj/Localizable.strings')
+def tables(lang):
+    merged = {}
+    for path in sorted(glob.glob(f'Resources/{lang}.lproj/*.strings')):
+        merged.update(table(path))
+    return merged
+
+en = tables('en')
+zh = tables('zh-Hans')
 en_p = plural_keys('Resources/en.lproj/Localizable.stringsdict')
 zh_p = plural_keys('Resources/zh-Hans.lproj/Localizable.stringsdict')
 

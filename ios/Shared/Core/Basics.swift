@@ -12,15 +12,27 @@ extension Date { var ms: Ms { Ms(timeIntervalSince1970 * 1000) } }
 /// The language the app speaks right now (the bundle's best match, so tests and screenshots can pick one).
 var isZh: Bool { (Bundle.main.preferredLocalizations.first ?? "en").hasPrefix("zh") }
 
-/// Looks a string up in Localizable.strings and fills `%1$@` / `%1$d` from `args`.
+/// The string tables the app reads, in order: the main one, then the ones the widgets and the Watch keep.
+private let stringTables = ["Localizable", "Widgets", "Watch"]
+private let missing = "\u{1}missing\u{1}"
+
+private func localized(_ key: String) -> String {
+  for table in stringTables {
+    let s = Bundle.main.localizedString(forKey: key, value: missing, table: table)
+    if s != missing { return s }
+  }
+  return key
+}
+
+/// Looks a string up in Localizable.strings (or Widgets.strings, Watch.strings) and fills `%1$@` / `%1$d` from `args`.
 func t(_ key: String, _ args: CVarArg...) -> String {
-  let format = NSLocalizedString(key, value: key, comment: "")
+  let format = localized(key)
   return args.isEmpty ? format : String(format: format, locale: Locale.current, arguments: args)
 }
 
 /// `t` for a plural (Localizable.stringsdict) key: `tn("n_bumps", 3)` is "3 bumps".
 func tn(_ key: String, _ n: Int) -> String {
-  String(format: NSLocalizedString(key, value: key, comment: ""), locale: Locale.current, n)
+  String(format: localized(key), locale: Locale.current, n)
 }
 
 // MARK: - Time and durations
