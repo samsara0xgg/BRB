@@ -1,0 +1,49 @@
+name: iOS screenshots
+
+# Builds the app for the simulator, launches it in demo mode on each scene, and puts the screenshots on the
+# ci-shots-ios branch (and in the run's artifacts). Review aid for the iPhone PR; it is removed before merging.
+on:
+  pull_request:
+    paths:
+      - "ios/**"
+      - ".github/workflows/ios-shots.yml"
+
+jobs:
+  shots:
+    runs-on: macos-26
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate the project
+        working-directory: ios
+        run: xcodegen
+      - name: Build for the simulator
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project BRB.xcodeproj -scheme BRB -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | grep -E "error:|BUILD (SUCCEEDED|FAILED)" | sort -u | head -80
+      - name: Take the screenshots
+        run: ios/scripts/shots.sh "$RUNNER_TEMP/dd/Build/Products/Debug-iphonesimulator/BRB.app" "$RUNNER_TEMP/shots"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/shots
+      - name: Publish to the ci-shots-ios branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm -rf "$RUNNER_TEMP/pub" && mkdir "$RUNNER_TEMP/pub" && cd "$RUNNER_TEMP/pub"
+          git init -q -b ci-shots-ios
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          cp "$RUNNER_TEMP"/shots/*.jpg .
+          echo "${{ github.event.pull_request.head.sha }}" > SHA
+          git add -A
+          git commit -q -m "screenshots ${{ github.event.pull_request.head.sha }}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" HEAD:ci-shots-ios
