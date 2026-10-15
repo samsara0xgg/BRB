@@ -1,4 +1,5 @@
 import AppIntents
+import Foundation
 
 /// What Siri, Spotlight and the Shortcuts app offer without any setup. The intents themselves are in
 /// Shared/Intents; this provider must exist in the app target only.
