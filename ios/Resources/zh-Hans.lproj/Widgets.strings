@@ -1,0 +1,45 @@
+/* 小组件、实时活动、灵动岛、控制项、快捷指令动作，以及它们说的话。
+   t() 在 Localizable.strings 之后查这张表；快捷指令的标题会直接指定这张表。 */
+
+/* 小组件库 */
+"wi_name" = "守护状态";
+"wi_desc" = "看看 Mac 有没有在守护，也可以直接开始或停止。";
+"wg_recent" = "最近";
+"wi_updated" = "更新于 %1$@";
+"wi_warnIn" = "距离鸣笛";
+
+/* 快捷指令：动作和参数 */
+"wi_macType" = "Mac";
+"wi_p_mac" = "Mac";
+"wi_start_title" = "开始守护";
+"wi_start_desc" = "让你的一台 Mac 开始守护。";
+"wi_stop_title" = "停止守护";
+"wi_stop_desc" = "停止守护，或解除警报。需要先解锁手机。";
+"wi_cancel_title" = "取消倒计时";
+"wi_hush_title" = "停止鸣笛";
+"wi_hush_desc" = "让 Mac 停止鸣笛。它仍然保持锁定并继续录像。";
+"wi_status_title" = "获取守护状态";
+"wi_status_desc" = "告诉你 Mac 有没有在守护。";
+"wi_latest_title" = "获取最近一次记录";
+"wi_latest_desc" = "告诉你最近一次守护是怎么过的。";
+
+/* 控制项 */
+"wi_set_title" = "守护";
+"wi_control_name" = "守护";
+"wi_control_desc" = "开始或停止守护你的 Mac。";
+
+/* 动作的回答 */
+"wi_needsPro" = "开始、停止和停止鸣笛需要 BRB Pro。";
+"wi_noMac" = "还没有配对的 Mac。打开 BRB 配对一台。";
+"wi_already" = "%1$@ 已经在守护了。";
+"wi_failed" = "连不上 %1$@。";
+"wi_started" = "%1$@ 几秒后开始守护。";
+"wi_notStarted" = "%1$@ 没有开始守护。请在 Mac 上的 BRB 里检查权限。";
+"wi_stopped" = "%1$@ 已停止守护。";
+"wi_notGuarding" = "%1$@ 没有在守护。";
+"wi_hushed" = "%1$@ 已停止鸣笛。";
+"wi_noAlarm" = "没有 Mac 在报警。";
+"wi_unconfirmed" = "%1$@ 还没有确认。";
+"wi_status" = "%1$@：%2$@。%3$@。";
+"wi_noSessions" = "还没有记录。";
+"wi_latest" = "%1$@ 的最近一次记录：%2$@，%3$@。";
