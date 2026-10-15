@@ -86,6 +86,10 @@ jobs:
           xcodebuild -version
           xcodebuild -showsdks
           xcrun simctl list devices available | head -40
+      - name: Check the strings
+        run: |
+          plutil -lint ios/Resources/*.lproj/*.strings ios/Resources/*.lproj/*.stringsdict
+          python3 ios/scripts/check-strings.py
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate the project
@@ -98,3 +102,10 @@ jobs:
           xcodebuild -project BRB.xcodeproj -scheme BRB -configuration Debug \
             -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build 2>&1 \
             | tee "$RUNNER_TEMP/build.log" | grep -E "error:|warning: |BUILD (SUCCEEDED|FAILED)" | sort -u | head -150
+      - name: Unit tests
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project BRB.xcodeproj -scheme BRB -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' CODE_SIGNING_ALLOWED=NO test 2>&1 \
+            | tee "$RUNNER_TEMP/test.log" | grep -E "error:|Test Case .* (passed|failed)|Executed [0-9]+ tests|TEST (SUCCEEDED|FAILED)" | head -80
