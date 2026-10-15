@@ -84,6 +84,7 @@ extension Disarm {
     case .stopped: L("Guarding was stopped")
     case .sensorsSilent: L("Stopped: the sensors sent no data")
     case .tapFailed: L("Restarted to watch the keyboard")
+    case .phone: L("Disarmed from your iPhone")
     }
   }
 }

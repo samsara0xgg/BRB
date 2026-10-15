@@ -1,0 +1,12 @@
+{
+  "name": "brb-relay",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-timeout=180000 test/*.test.mjs",
+    "test:unit": "node --test test/apns.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

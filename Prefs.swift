@@ -95,4 +95,18 @@ enum Prefs {
     get { d.object(forKey: "veil") as? Bool ?? true }
     set { d.set(newValue, forKey: "veil") }
   }
+
+  /// An iPhone has claimed a pairing code. From then on the Mac keeps its socket to the relay open
+  /// between sessions, so the phone sees the Mac and can start it. Reset on a new link, which
+  /// unpairs every phone (they hold the old token).
+  static var phonePaired: Bool {
+    get { d.bool(forKey: "phonePaired") }
+    set { d.set(newValue, forKey: "phonePaired") }
+  }
+
+  /// What the last phone called itself when it paired ("Allen's iPhone"), for Settings.
+  static var phoneName: String {
+    get { d.string(forKey: "phoneName") ?? "" }
+    set { d.set(newValue, forKey: "phoneName") }
+  }
 }

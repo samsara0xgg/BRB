@@ -132,6 +132,7 @@ final class SettingsWindow: NSObject, NSToolbarDelegate, NSWindowDelegate {
     poll = nil
     animates = false
     model.cancelReset()
+    model.pairing.end()
   }
 
   // MARK: toolbar
@@ -345,12 +346,137 @@ private struct Meter: View {
   }
 }
 
-private struct PhonePane: View {
-  @ObservedObject var model: PanelModel
+/// Pairing the iPhone app: "Pair iPhone…" shows a code, as a QR code and as six digits, that renews
+/// itself while this pane is open. Once a phone has claimed it, the pane says so and offers to undo it.
+private struct IPhoneGroup: View {
+  @ObservedObject var pairing: PairingModel
+  @AppStorage("phonePaired") private var paired = false
+  @AppStorage("phoneName") private var name = ""
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
+      SettingsGroup {
+        if pairing.shown {
+          if let offer = pairing.offer {
+            code(offer)
+              .transition(.opacity)
+          } else if pairing.failed {
+            SettingsRow(title: L("Couldn't make a code"), sub: L("Check the network and try again.")) {
+              HStack(spacing: 8) {
+                Button(L("Done"), action: pairing.end)
+                Button(L("Try again"), action: pairing.begin)
+              }
+              .controlSize(.small)
+            }
+          } else {
+            ProgressView()
+              .controlSize(.small)
+              .frame(maxWidth: .infinity, minHeight: 44)
+          }
+        } else if paired {
+          SettingsRow(title: name.isEmpty ? L("An iPhone is paired") : L("Paired with %@", name),
+                      sub: L("It can stop the siren, disarm and start guarding.")) {
+            Button(L("Pair iPhone…"), action: pairing.begin)
+              .controlSize(.small)
+          }
+          RowDivider()
+          ZStack {
+            if pairing.confirmUnpair {
+              confirm.transition(.opacity.combined(with: .offset(y: 4)))
+            } else {
+              unpairRow.transition(.opacity)
+            }
+          }
+          .controlSize(.small)
+        } else {
+          SettingsRow(title: L("BRB on your iPhone"), sub: L("Stop the siren, disarm or start guarding from your phone, and see the history.")) {
+            Button(L("Pair iPhone…"), action: pairing.begin)
+              .controlSize(.small)
+          }
+        }
+      }
+      .animation(Theme.out(0.3), value: pairing.shown)
+      .animation(Theme.out(0.3), value: paired)
+      if pairing.shown, pairing.offer != nil {
+        Footnote(L("The code works once and renews itself while this is open."))
+      }
+    }
+    .onDisappear { pairing.end() }
+  }
+
+  private func code(_ offer: PairOffer) -> some View {
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(alignment: .top, spacing: 16) {
+        QRView(text: offer.link)
+          .id(offer.qr)
+          .transition(.opacity)
+        VStack(alignment: .leading, spacing: 10) {
+          Step(n: 1, text: L("Open the BRB app on your iPhone"))
+          Step(n: 2, text: L("Scan this code, or type the six digits"))
+          Text(verbatim: offer.spaced)
+            .font(.system(size: 26, weight: .semibold, design: .monospaced))
+            .textSelection(.enabled)
+          Text(L("Expires in %@", String(format: "%ld:%02ld", pairing.remaining / 60, pairing.remaining % 60)))
+            .font(Theme.label)
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
+        }
+        .padding(.top, 6)
+        Spacer(minLength: 0)
+      }
+      .padding(12)
+      RowDivider()
+      HStack {
+        Spacer(minLength: 8)
+        Button(L("Done"), action: pairing.end)
+      }
+      .controlSize(.small)
+      .padding(.horizontal, 12)
+      .frame(minHeight: 44)
+    }
+  }
+
+  private var unpairRow: some View {
+    HStack {
+      Spacer(minLength: 8)
+      Button(L("Unpair all phones…"), action: pairing.askUnpair)
+    }
+    .padding(.horizontal, 12)
+    .frame(minHeight: 44)
+  }
+
+  /// "Unpair all phones…" says what happens before it happens, as "Reset link…" does.
+  private var confirm: some View {
+    HStack(spacing: 8) {
+      Image(systemName: "exclamationmark.triangle.fill")
+        .symbolRenderingMode(.palette)
+        .foregroundStyle(Color.white, Theme.red)
+        .font(.system(size: 13))
+      Text(L("Every paired iPhone and the phone page link stop working at once."))
+        .font(Theme.caption)
+        .fixedSize(horizontal: false, vertical: true)
+      Spacer(minLength: 8)
+      Button(L("Cancel"), action: pairing.cancelUnpair)
+      Button(L("Unpair"), action: pairing.unpair)
+        .buttonStyle(.borderedProminent)
+        .tint(Theme.redDeep)
+    }
+    .padding(.horizontal, 12)
+    .frame(minHeight: 44)
+    .background(Theme.red.opacity(0.08))
+  }
+}
+
+private struct PhonePane: View {
+  @ObservedObject var model: PanelModel
+  @AppStorage("phonePaired") private var paired = false
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      SectionHead(L("iPhone app"))
+      IPhoneGroup(pairing: model.pairing)
       SectionHead(L("Alerts"))
+        .padding(.top, 12)
       SettingsGroup {
         SwitchRow(title: L("Send alerts to my phone"), sub: L("An alarm sends what happened and a photo"), on: $model.pushOn)
         if model.pushOn {
@@ -453,8 +579,9 @@ private struct PhonePane: View {
         .symbolRenderingMode(.palette)
         .foregroundStyle(Color.white, Theme.red)
         .font(.system(size: 13))
-      Text(L("The old link stops working at once."))
+      Text(paired ? L("The old link stops working at once. Paired iPhones are unpaired.") : L("The old link stops working at once."))
         .font(Theme.caption)
+        .fixedSize(horizontal: false, vertical: true)
       Spacer(minLength: 8)
       Button(L("Cancel"), action: model.cancelReset)
         .keyboardShortcut(.cancelAction)
