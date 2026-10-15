@@ -1,8 +1,8 @@
 import Foundation
 
-/// How a session ended.
+/// How a session ended. `phone`: its owner stopped it from the iPhone app (after Face ID there).
 enum Disarm: String, Codable {
-  case fingerprint, unlock, password, escape, stopped, sensorsSilent, tapFailed
+  case fingerprint, unlock, password, escape, stopped, sensorsSilent, tapFailed, phone
 }
 
 /// One armed stretch: for the panel's Recent list and the welcome-back summary.
@@ -42,7 +42,7 @@ struct Session: Codable {
   var alarmed: Bool { trigger != nil }
 
   /// Ended normally: the guarding ran and was stopped by its owner.
-  var quiet: Bool { trigger == nil && [.fingerprint, .unlock, .password].contains(disarm) }
+  var quiet: Bool { trigger == nil && [.fingerprint, .unlock, .password, .phone].contains(disarm) }
 
   /// What the notice says as the fog clears.
   var welcome: Welcome {

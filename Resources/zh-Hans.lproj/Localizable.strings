@@ -200,6 +200,7 @@
 "Guarding was stopped" = "警戒被停止";
 "Stopped: the sensors sent no data" = "已停止：传感器没有数据";
 "Restarted to watch the keyboard" = "为了监听键盘而重启";
+"Disarmed from your iPhone" = "已从 iPhone 解除";
 
 /* Prefs.swift */
 "Library" = "图书馆";
