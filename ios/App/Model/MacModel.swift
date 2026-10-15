@@ -46,6 +46,8 @@ final class MacModel: Identifiable {
   var queued = false
   /// The phone has no network at all.
   var phoneOffline = false
+  /// The Mac made a new link: this phone's token no longer works.
+  private(set) var linkEnded = false
 
   init(paired: PairedMac, snapshot: MacSnapshot? = nil) {
     self.id = paired.id
@@ -92,6 +94,12 @@ final class MacModel: Identifiable {
         photos: photosOfAlarm(from: old.at ?? old.since, in: snapshot.view.photos), events: old.events)
     }
     if view.state?.phase == .triggered { finished = nil }
+    if view.level == .reset || view.level == .expired {
+      if !linkEnded { AppStore.shared.show(t("err_forbidden"), "exclamationmark.triangle") }
+      linkEnded = true
+    } else {
+      linkEnded = false
+    }
     AppStore.shared.macChanged(self, from: oldLook)
   }
 
