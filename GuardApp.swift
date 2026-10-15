@@ -34,8 +34,14 @@ extension Trigger {
 /// locked Mac, and the owner has to wake it to unlock.
 final class GuardApp: NSObject, NSApplicationDelegate {
   enum Phase: String { case idle, arming, armed, triggered }
+  /// What a triggered alarm is doing, in the phone's words; `hushed`: its owner silenced it from the phone.
+  private enum Stage: String { case soft, siren, hushed }
   static let countdownSeconds = 5.0
   static let softSeconds = 10.0
+  /// After a hush, movement that was already under way does not sound the siren again for this long.
+  static let hushGrace = 5.0
+  /// The battery and the checks go to a paired phone this often (and when they change).
+  static let phoneRefresh = 300.0
   static let supportDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/BRB")
   static let stateFile = supportDir.appendingPathComponent("phase")
   /// pmset calls in order, off the main thread (audit L5).
@@ -92,9 +98,20 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private var trigger: Trigger?
   private var triggeredAt = Date.distantPast
   private var softFrom: Date?
+  /// When the soft stage ended: the siren's start, or the owner calling it off.
+  private var softTo: Date?
+  /// When the siren that is sounding now started; nil while it is silent.
   private var sirenFrom: Date?
+  /// Seconds of siren in stretches the owner has since silenced.
+  private var sirenSpent = 0.0
+  private var stage: Stage?
+  private var hushedAt = Date.distantPast
+  /// The Mac is being carried right now (while triggered), as the phone was last told.
+  private var carried = false
+  private var carriedAt = Date.distantPast
   private var clip: URL?
   private var photos = 0
+  private var photoTimes: [Int64] = []
   private var latestPhoto: Data?
   // The menu-bar shield between sessions (audit C5, D4).
   /// The look it keeps while the notice flies back, so it changes as the notice lands.
@@ -109,6 +126,13 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private var iconTimer: Timer?
   /// A real alarm the owner hasn't looked at yet: a red dot until the panel shows it.
   private var unseen = false
+  // The iPhone app.
+  /// The relay socket is wanted between sessions: a phone is paired, or a pairing code is good.
+  private var holding = false
+  private var mac: LiveState.Mac?
+  private var baseHealth = LiveState.Health(ax: true, cam: true, lid: true, mot: true)
+  private var phoneTimer: Timer?
+  private var prefsPending = false
 
   func applicationDidFinishLaunching(_ note: Notification) {
     GuardApp.moveOldFolders()
@@ -162,12 +186,23 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     }
     veil.onRebuild = { [weak self] in self?.listenForFinger() }
     veil.onLanded = { [weak self] in self?.landed() }
+    live.onCommand = { [weak self] command in self?.phone(command) }
+    live.onPaired = { [weak self] device in self?.paired(by: device) }
+    m.pairing.onWatch = { [weak self] _ in self?.syncPhone() }
+    m.onChecks = { [weak self] checks in self?.checked(checks) }
+    // The iPhone sees the Mac's place, note, volume and test mode: a change in the panel, or anywhere
+    // in the defaults, is looked at a moment later. A new link unpairs every phone.
+    NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+      self?.prefsChanged()
+    }
+    NotificationCenter.default.addObserver(forName: Live.didReset, object: nil, queue: .main) { [weak self] _ in self?.linkReset() }
     unseen = History.load().contains { $0.alarmed && !$0.test && $0.ended > Prefs.alarmsSeenAt }
     installMenu()
     watchPower()
     Recorder.prune()
     render()
     resume()
+    syncPhone()
     openAtLogin()
     if !Prefs.introSeen && phase == .idle {  // first launch: a menu-bar app is easy to miss
       DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
@@ -250,9 +285,14 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     degraded = false
     trigger = nil
     softFrom = nil
+    softTo = nil
     sirenFrom = nil
+    sirenSpent = 0
+    stage = nil
+    carried = false
     clip = nil
     photos = 0
+    photoTimes = []
     latestPhoto = nil
     parked = nil
     landing = false
@@ -304,11 +344,20 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     m.recording = recorder != nil
     m.pushOn = Push.enabled
     m.locked = screenLocked
-    live.start(recorder, state: LiveState(phase: phase.rawValue, since: LiveState.ms(armedAt), place: Prefs.place.rawValue, note: Prefs.note,
-                                          push: Push.enabled, test: test, camera: recorder != nil))
+    var first = LiveState(phase: phase.rawValue, since: LiveState.ms(armedAt), armEnd: LiveState.ms(armedAt.addingTimeInterval(GuardApp.countdownSeconds)),
+                          place: Prefs.place.rawValue, note: Prefs.note, vol: volumePercent, push: Push.enabled, test: test, camera: recorder != nil)
+    first.lastEnd = lastEnd
+    if holding {  // the Mac's own details go to the relay only for a phone that is paired
+      first.mac = mac ?? MacInfo.card()
+      first.health = health
+    }
+    live.start(recorder, state: first)
     let s = Sensors()
     s.onAccel = { [weak self] a in
-      guard let self, let hit = motion.feed(a) else { return }
+      guard let self else { return }
+      let hit = motion.feed(a)
+      if phase == .triggered { follow(hit) }
+      guard let hit else { return }
       fire(hit.kind, hit.detail)
     }
     s.onLid = { [weak self] angle in
@@ -380,8 +429,10 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     phase = .armed
     panel.close()  // from here a click is a touch
     veil.armed()
-    live.update { $0.phase = "armed" }
-    live.event("armed", Prefs.place.rawValue)
+    live.update(event: "armed", key: Prefs.place.rawValue) {
+      $0.phase = "armed"
+      $0.armEnd = 0
+    }
     log("armed; lid at \(lid.rest.map { String(format: "%.0f°", $0) } ?? "-"), \(armedOnAC ? "on the charger" : "on battery")")
     // The sensor processor can stop streaming (e.g. macOS resets the report interval): re-wake it,
     // and say so when it stays silent (audit H4: the shield goes half, the phone is told).
@@ -397,7 +448,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
         if !degraded && Date().timeIntervalSince(since) >= 15 {
           degraded = true
           render()
-          live.event("warning", "motion")
+          live.update(event: "warning", key: "motion") { if self.holding { $0.health = self.health } }
           if Push.enabled { Push.warning(L("The motion sensor stopped. The lid, the charger and touch still count."), test: test) }
         }
       } else if silentSince != nil {
@@ -405,6 +456,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
         if degraded {
           degraded = false
           render()
+          publishPhone()
           log("accelerometer back")
         }
       }
@@ -464,31 +516,43 @@ final class GuardApp: NSObject, NSApplicationDelegate {
       }
     }
 
+    carried = false
     if kind.sirenAtOnce {
       sirenFrom = at
+      stage = .siren
       soundAlarm(.loud)
     } else {
       softFrom = at
+      stage = .soft
       soundAlarm(.soft)
       DispatchQueue.main.asyncAfter(deadline: .now() + GuardApp.softSeconds) { [weak self] in
-        guard let self, phase == .triggered, triggeredAt == at else { return }
-        sirenFrom = Date()
+        // Not when the owner called it off from the phone meanwhile.
+        guard let self, phase == .triggered, triggeredAt == at, stage == .soft else { return }
+        let now = Date()
+        softTo = now
+        sirenFrom = now
+        stage = .siren
         soundAlarm(.loud)
-        live.update { $0.siren = true }
-        live.event("siren")
+        live.update(event: "siren", at: now) {
+          $0.siren = true
+          $0.stage = Stage.siren.rawValue
+          $0.softEnd = nil
+        }
         if Push.enabled { Push.siren(test: test, link: live.alarmLink, photo: latestPhoto) }
       }
     }
 
     live.alarm()
-    live.update {
+    live.update(event: "triggered", key: kind.rawValue, at: at) {
       $0.phase = "triggered"
       $0.trigger = kind.rawValue
       $0.at = LiveState.ms(at)
       $0.siren = kind.sirenAtOnce
+      $0.stage = (kind.sirenAtOnce ? Stage.siren : Stage.soft).rawValue
+      $0.softEnd = kind.sirenAtOnce ? nil : LiveState.ms(at.addingTimeInterval(GuardApp.softSeconds))
+      $0.carried = false
       $0.bumps = motion.bumps
     }
-    live.event("triggered", kind.rawValue, at: at)
     let link = live.alarmLink
     if let recorder {
       clip = recorder.save { [weak self] photo in
@@ -511,10 +575,12 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   }
 
   private func took(_ photo: Data) {
+    let at = Date()
     photos += 1
+    photoTimes.append(LiveState.ms(at))
     latestPhoto = photo
-    live.upload(photo)
-    live.event("photo")
+    live.upload(photo, at: at)
+    live.event("photo", at: at)
   }
 
   private func soundAlarm(_ level: Alarm.Level) {
@@ -552,20 +618,34 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     phase = .idle
     let now = Date()
     let session = Session(armed: armedAt, ended: now, trigger: trigger, triggeredAt: trigger == nil ? nil : triggeredAt, disarm: how,
-                          bumps: motion.bumps, softSeconds: softFrom.map { Int((sirenFrom ?? now).timeIntervalSince($0)) } ?? 0,
-                          sirenSeconds: sirenFrom.map { Int(now.timeIntervalSince($0)) } ?? 0, photos: photos,
+                          bumps: motion.bumps, softSeconds: softFrom.map { Int((softTo ?? now).timeIntervalSince($0)) } ?? 0,
+                          sirenSeconds: Int(sirenSpent + (sirenFrom.map { now.timeIntervalSince($0) } ?? 0)), photos: photos,
                           clip: clip?.lastPathComponent, test: test)
-    if guarded || how == .sensorsSilent { History.add(session) }
+    let recorded = guarded || how == .sensorsSilent
+    if recorded { History.add(session) }
     // Test mode covers one run, then turns itself off (audit H1).
     if test && guarded { Prefs.testMode = false }
     if trigger != nil && Push.enabled { Push.disarmed(how, at: now, test: test) }
-    live.update {
+    // One state with its event: the relay (and the push it may send) reads how it ended from them together.
+    let last = lastEnd
+    degraded = false
+    live.update(event: guarded ? "disarmed" : "cancelled", key: how.rawValue, at: now) {
       $0.phase = "idle"
+      $0.since = 0
+      $0.armEnd = 0
+      $0.lastEnd = last
+      $0.test = Prefs.testMode  // idle: whether the next run is a test
       $0.siren = false
+      $0.stage = nil
+      $0.softEnd = nil
+      $0.carried = false
       $0.pass = nil  // the push link stops working here
+      if holding { $0.health = health }
     }
-    live.event(guarded ? "disarmed" : "cancelled", how.rawValue, at: now)
+    if recorded { live.session(sessionRecord(session)) }
     stopWatching(exiting: exiting)
+    stage = nil
+    carried = false
     if !exiting {
       if guarded {
         veil.welcome(session.welcome, toward: item.button?.window?.frame)  // lands at once when the veil is down
@@ -576,6 +656,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
       }
     }
     log("disarmed: \(how.rawValue)")
+    refreshIdle()
     // ponytail: macOS can restart the camera stream by itself after we stopped it (live 2026-09-24:
     // a Touch ID press powered the camera off and on around a disarm, and the light stayed on with
     // nobody reading it). Relaunching drops that stream; a real fix needs CoreMediaIO to honor the stop.
@@ -584,6 +665,271 @@ final class GuardApp: NSObject, NSApplicationDelegate {
             Recorder.camera?.isInUseByAnotherApplication == false else { return }
       log("camera still streaming after the disarm with nobody using it; relaunching to release it")
       exit(1)  // launchd relaunches after a non-zero exit
+    }
+  }
+
+  // MARK: iPhone app
+
+  private var volumePercent: Int { Int((Alarm.loudVolume * 100).rounded()) }
+
+  /// When the previous session ended, from the history.
+  private var lastEnd: Int64? { History.load().first.map { LiveState.ms($0.ended) } }
+
+  /// What works, as the phone is told: the last checks, and the motion sensor unless it went quiet.
+  private var health: LiveState.Health {
+    var h = baseHealth
+    h.mot = !degraded
+    return h
+  }
+
+  /// A finished session for the iPhone's history: the Recent list's facts, with its photos and events.
+  private func sessionRecord(_ s: Session) -> SessionRecord {
+    SessionRecord(id: String(LiveState.ms(s.armed)), start: LiveState.ms(s.armed), end: LiveState.ms(s.ended), place: live.state.place,
+                  bumps: s.bumps, kind: s.test ? "test" : s.alarmed ? "alarm" : "quiet", trigger: s.trigger?.rawValue,
+                  at: s.triggeredAt.map(LiveState.ms), how: s.disarm.rawValue, soft: s.softSeconds, siren: s.sirenSeconds,
+                  photos: photoTimes, events: live.state.events, clip: s.clip)
+  }
+
+  /// Keeps the socket to the relay open between sessions while a phone is paired (or a pairing code
+  /// is good, to hear it claimed), and the phone's picture of this Mac fresh. Cheap to call: it acts
+  /// only when the answer changes.
+  private func syncPhone() {
+    let want = Prefs.phonePaired || panel.model.pairing.watching
+    guard want != holding else { return }
+    holding = want
+    phoneTimer?.invalidate()
+    phoneTimer = nil
+    if want {
+      mac = MacInfo.card()
+      checkHealth()
+      let t = Timer(timeInterval: GuardApp.phoneRefresh, repeats: true) { [weak self] _ in
+        self?.mac = MacInfo.card()
+        self?.checkHealth()
+        self?.publishPhone()
+      }
+      RunLoop.main.add(t, forMode: .common)
+      phoneTimer = t
+    } else {
+      mac = nil
+    }
+    live.keepOpen(want, idle: idleState())
+    log(want ? "phone link kept open between sessions" : "phone link closed between sessions")
+    publishPhone()  // a session that was resumed before this knew of the phone
+  }
+
+  /// The Mac as the phone sees it between sessions: the settings it can change, whether this Mac is
+  /// fit to start, and how the last session went (its events stay until the next one starts).
+  private func idleState() -> LiveState {
+    var s = live.state
+    s.v = 3
+    s.phase = "idle"
+    s.since = 0
+    s.armEnd = 0
+    s.lastEnd = lastEnd
+    s.place = Prefs.place.rawValue
+    s.note = Prefs.note
+    s.vol = volumePercent
+    s.push = Push.enabled
+    s.test = Prefs.testMode  // the next run is a test
+    s.camera = baseHealth.cam
+    s.siren = false
+    s.stage = nil
+    s.softEnd = nil
+    s.carried = false
+    s.pass = nil
+    s.mac = mac ?? MacInfo.card()
+    s.health = health
+    return s
+  }
+
+  /// Sends the idle picture again if anything in it changed.
+  private func refreshIdle() {
+    guard holding, phase == .idle else { return }
+    let next = idleState()
+    guard next != live.state else { return }
+    live.update { $0 = next }
+  }
+
+  /// A paired phone is told what changed: the idle picture, or during a session the Mac's card and health.
+  private func publishPhone() {
+    guard holding else { return }
+    guard phase != .idle else { return refreshIdle() }
+    let card = mac, current = health
+    guard live.state.mac != card || live.state.health != current else { return }
+    live.update {
+      $0.mac = card
+      $0.health = current
+    }
+  }
+
+  private func checkHealth() {
+    Preflight.run { [weak self] checks in self?.checked(checks) }
+  }
+
+  /// New results of the checks (the panel runs them once a second while it is open).
+  private func checked(_ checks: [Check]) {
+    guard holding else { return }
+    func fine(_ id: Check.ID) -> Bool { checks.first { $0.id == id }?.ok ?? true }
+    let next = LiveState.Health(ax: fine(.accessibility), cam: fine(.camera), lid: fine(.sleep), mot: true)
+    guard next != baseHealth else { return }
+    baseHealth = next
+    publishPhone()
+  }
+
+  /// The place, note, volume or test mode may have changed in the panel; or a phone got paired or unpaired.
+  private func prefsChanged() {
+    guard !prefsPending else { return }
+    prefsPending = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+      guard let self else { return }
+      prefsPending = false
+      syncPhone()
+      refreshIdle()
+    }
+  }
+
+  /// A new link (from the panel, Settings or the phone): every phone is unpaired and the relay has a
+  /// new room. A session that is running moves to it; between sessions the socket is let go.
+  private func linkReset() {
+    panel.model.pairing.finish()
+    syncPhone()
+    live.reconnect()
+  }
+
+  /// A phone claimed the pairing code. From now on the socket stays open between sessions.
+  private func paired(by device: String) {
+    log("paired with \(device)")
+    Prefs.phonePaired = true
+    Prefs.phoneName = String(device.prefix(40))
+    panel.model.pairing.finish()
+    syncPhone()
+    live.event("paired")
+  }
+
+  /// A command from a paired phone, through the relay. Every one is answered, so the app is never
+  /// left waiting; a `hush`, `stop` or `disarm` that arrives late finds nothing to do and says ok.
+  private func phone(_ c: PhoneCommand) {
+    log("phone command: \(c.kind.rawValue) (\(c.id))")
+    if let by = c.by { log("  confirmed by \(by)") }  // the phone asked for Face ID; the Mac cannot check it
+    switch c.kind {
+    case .start:
+      phoneStart(c)
+    case .stop:
+      switch phase {
+      case .idle: break
+      case .arming: disarm(.escape)
+      case .armed, .triggered: disarm(.phone)
+      }
+      live.ack(c.id)
+    case .hush:
+      hush()
+      live.ack(c.id)
+    case .disarm:
+      if phase == .triggered { disarm(.phone) }
+      live.ack(c.id)
+    case .set:
+      phoneSet(c)
+    case .reset:
+      live.ack(c.id) { [weak self] in
+        Live.resetLink()
+        self?.panel.model.liveLink = Live.link.absoluteString
+      }
+    }
+  }
+
+  private func phoneStart(_ c: PhoneCommand) {
+    guard phase == .idle else { return live.ack(c.id, ok: false, why: "busy") }
+    guard !screenLocked else { return live.ack(c.id, ok: false, why: "locked") }
+    // What the panel's start button needs, checked now: a permission may have been taken away since.
+    Preflight.run { [weak self] checks in
+      guard let self else { return }
+      guard phase == .idle else { return live.ack(c.id, ok: false, why: "busy") }
+      guard checks.allSatisfy({ $0.ok || $0.optional }) else { return live.ack(c.id, ok: false, why: "not-ready") }
+      applySettings(c)
+      if Prefs.veil { panel.close() }
+      arm()
+      live.ack(c.id)
+    }
+  }
+
+  /// Between sessions everything may change; while one runs, only the note on the frosted screen.
+  private func phoneSet(_ c: PhoneCommand) {
+    if phase != .idle, c.place != nil || c.vol != nil || c.test != nil {
+      return live.ack(c.id, ok: false, why: "busy")
+    }
+    applySettings(c)
+    if phase == .idle {
+      refreshIdle()
+    } else {
+      live.update { $0.note = Prefs.note }
+    }
+    live.ack(c.id)
+  }
+
+  /// A phone's `start` or `set`: the preferences and the panel take the new values, as a click would.
+  private func applySettings(_ c: PhoneCommand) {
+    let m = panel.model
+    if let place = c.place {
+      Prefs.place = place
+      m.place = place
+    }
+    if let note = c.note {
+      Prefs.note = note
+      m.note = Prefs.note
+      if phase != .idle { veil.model.note = Prefs.note }
+    }
+    if let vol = c.vol {
+      Alarm.loudVolume = Float32(vol) / 100
+      m.volume = Double(Alarm.loudVolume * 100)
+    }
+    if let test = c.test {
+      Prefs.testMode = test
+      m.testMode = test
+    }
+  }
+
+  /// The owner silenced the alarm from the phone: the beeps or the siren stop, and the Mac stays locked
+  /// and keeps filming. Movement after this (a new lift) sounds the siren again.
+  private func hush() {
+    guard phase == .triggered, let was = stage, was != .hushed else { return }
+    let now = Date()
+    alarm?.stop()
+    alarm = nil
+    if was == .soft {
+      softTo = now
+    } else if let from = sirenFrom {
+      sirenSpent += now.timeIntervalSince(from)
+      sirenFrom = nil
+    }
+    stage = .hushed
+    hushedAt = now
+    motion.settle()
+    log("alarm \(was == .soft ? "called off" : "hushed") from the phone")
+    live.update(event: was == .soft ? "calledoff" : "hushed", at: now) {
+      $0.siren = false
+      $0.stage = Stage.hushed.rawValue
+      $0.softEnd = nil
+    }
+  }
+
+  /// After a trigger, every motion sample: whether the Mac is being carried (for the phone), and a lift
+  /// or tilt that starts again after a hush.
+  private func follow(_ hit: Hit?) {
+    let moving = motion.carried
+    if moving != carried, Date().timeIntervalSince(carriedAt) >= 2 {  // not every wobble around the threshold
+      carried = moving
+      carriedAt = Date()
+      live.update { $0.carried = moving }
+    }
+    guard stage == .hushed, let hit, hit.kind == .lifted || hit.kind == .tilted,
+          Date().timeIntervalSince(hushedAt) >= GuardApp.hushGrace else { return }
+    log("hushed Mac moved again: \(hit.kind.rawValue), \(hit.detail)")
+    stage = .siren
+    sirenFrom = Date()
+    soundAlarm(.loud)
+    live.update(event: "lift", key: hit.kind.rawValue) {
+      $0.siren = true
+      $0.stage = Stage.siren.rawValue
     }
   }
 

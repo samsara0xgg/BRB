@@ -94,7 +94,7 @@ power button, so the power button waits 400 ms for the finger before it counts.
   with the ntfy app, and send a test. An alarm sends what happened and a photo; a disarm follows.
   The topic name is the only secret, and ntfy.sh keeps a photo for 3 hours.
 - **The phone page** is a link in the panel, with a QR code. Before an alarm it shows whether the
-  Mac is guarded; after one, the live camera, up to 6 photos (kept 30 days) and what happened. It
+  Mac is guarded; after one, the live camera, up to 6 photos (kept 7 days) and what happened. It
   can only watch. The link in an alarm push works only until that alarm is disarmed, because ntfy
   keeps its messages; the panel's link keeps working. **Reset link** in the panel makes the old
   one stop working and forgets what the relay kept.
@@ -104,6 +104,13 @@ author's. To run your own: `cd relay && npx wrangler deploy`, then
 `defaults write com.allen.guard-mode relayHost <your-worker>.workers.dev` and restart BRB.
 Optionally set `CAM_IDS` on the Worker to the room ids allowed to connect (the part of the panel's
 phone link after `/v/`).
+
+The **iPhone app** pairs with a Mac from Settings → Phone → **Pair iPhone…**: scan the code, or
+type its six digits. From the app you can stop the siren, disarm, start and stop guarding, and look
+at the history. It needs relay v3, so deploy again with `npx wrangler deploy`. Push to the app is
+optional and needs your Apple Push key as Worker secrets (`npx wrangler secret put APNS_KEY`, then
+`APNS_KEY_ID`, `APNS_TEAM_ID` and `APNS_TOPIC`); without them the app still works while it is open.
+The protocol is in `relay/PROTOCOL.md`; `cd relay && npm ci && npm test` runs the relay's tests.
 
 ## Commands
 

@@ -1,2 +1,4 @@
 build/
 dist/
+relay/node_modules/
+relay/.wrangler/

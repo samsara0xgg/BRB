@@ -61,6 +61,20 @@ struct MotionDetector {
     calm = calmSamples
   }
 
+  /// Takes where the laptop is now as its rest and forgets the recent movement, keeping the bump
+  /// count. After the owner silenced the siren from the phone: only a new lift or tilt from here
+  /// sounds it again, not the position that set it off.
+  mutating func settle() {
+    rest = gravity
+    shaking.removeAll()
+  }
+
+  /// Moving by the same measure as a lift, whatever the tilt: what the phone shows as "being
+  /// carried". Never on the go, where shaking is normal.
+  var carried: Bool {
+    detectsShaking && Double(shaking.filter { $0 }.count) / Double(window) >= sustainFraction
+  }
+
   /// Feeds one sample in g; returns a hit once the laptop counts as moved.
   mutating func feed(_ a: Vec3) -> Hit? {
     guard let g = gravity else { gravity = a; return nil }
