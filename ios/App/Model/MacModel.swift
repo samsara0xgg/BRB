@@ -69,6 +69,7 @@ final class MacModel: Identifiable {
   /// Everything about this Mac that the relay sent, in one place.
   func apply(view: RelayView, raw: Data? = nil, at now: Ms = nowMs()) {
     let old = snapshot.view.state
+    let oldLook: Look? = snapshot.view.state == nil ? nil : snapshot.look
     var snap = snapshot
     snap.view = view
     snap.lastSeen = now
@@ -91,6 +92,7 @@ final class MacModel: Identifiable {
         photos: photosOfAlarm(from: old.at ?? old.since, in: snapshot.view.photos), events: old.events)
     }
     if view.state?.phase == .triggered { finished = nil }
+    AppStore.shared.macChanged(self, from: oldLook)
   }
 
   func apply(frame data: Data, at now: Ms = nowMs()) {

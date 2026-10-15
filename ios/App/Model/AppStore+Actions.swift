@@ -1,6 +1,7 @@
 import Network
 import SwiftUI
 import UIKit
+import WidgetKit
 
 /// Watches whether the phone has a network at all, so the pages can say "your phone is offline".
 final class NetworkMonitor {
@@ -19,6 +20,21 @@ final class NetworkMonitor {
 extension AppStore {
   /// What the pages should pretend, for screenshots (`-pstate loading|error|empty|offline`), else the phone's real state.
   var pageState: String? { launch.pageState ?? (phoneOffline ? "offline" : nil) }
+
+  /// A Mac's snapshot just changed: refresh widgets and its Live Activity, and bring an alarm to the front.
+  func macChanged(_ mac: MacModel, from oldLook: Look?) {
+    guard let oldLook, oldLook != mac.look else { return }
+    if !isDemo {
+      WidgetCenter.shared.reloadAllTimelines()
+      liveActivities.update(for: mac)
+    }
+    if mac.look == .alarm || mac.look == .warn, !oldLook.isAlarm {
+      UINotificationFeedbackGenerator().notificationOccurred(.warning)
+      if appActive && onboarding == nil && alarmMacID == nil { openAlarm(mac) }
+    }
+    if oldLook.isAlarm && !mac.look.isAlarm, mac.finished != nil, tab != .records { recordsBadge = true }
+    if mac.look.isGuarding || mac.look == .idle { Task { await loadHistory(mac, force: true) } }
+  }
 
   func addMac() {
     onboarding = Onboarding(step: .scan, extra: true)

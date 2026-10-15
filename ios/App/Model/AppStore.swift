@@ -85,6 +85,8 @@ final class AppStore {
   var recordMac: String?
   /// An error the whole screen should show instead of cards ("Can't reach BRB").
   var loadFailed = false
+  /// The app is in front (so an alarm can open its page by itself).
+  var appActive = true
 
   let entitlements = Entitlements()
   var pro: Bool { entitlements.pro }
@@ -93,7 +95,7 @@ final class AppStore {
   var pushToStartToken: String?
   let launch = LaunchOptions()
   let network = NetworkMonitor()
-  private var toastTask: Task<Void, Never>?
+  @ObservationIgnored private var toastTask: Task<Void, Never>?
 
   init() {
     if launch.demo {
@@ -126,6 +128,7 @@ final class AppStore {
     if !isDemo {
       network.onChange = { [weak self] offline in self?.phoneOffline = offline }
       network.start()
+      liveActivities.start()
     }
     applyLaunchDestination()
   }
@@ -138,6 +141,7 @@ final class AppStore {
   }
 
   func scenePhase(active: Bool) {
+    appActive = active
     guard !isDemo else { return }
     if active {
       for m in macs { backend.attach(m); Task { await backend.refresh(m) } }
@@ -358,7 +362,8 @@ final class AppStore {
     }
   }
 
-  lazy var pushRegistrar = PushRegistrar(store: self)
+  @ObservationIgnored lazy var pushRegistrar = PushRegistrar(store: self)
+  @ObservationIgnored lazy var liveActivities = LiveActivityController(store: self)
 
   func proChanged() {
     syncWatch()
