@@ -114,6 +114,17 @@ struct WidgetBox: View {
     }
   }
 
+  // `widgetFamily` can't be set outside WidgetKit, so each family's view is drawn directly.
+  @ViewBuilder private var content: some View {
+    switch family {
+    case .systemSmall: BRBSmallView(entry: entry)
+    case .accessoryCircular: BRBCircularView(entry: entry)
+    case .accessoryRectangular: BRBRectangularView(entry: entry)
+    case .accessoryInline: BRBInlineView(entry: entry)
+    default: BRBMediumView(entry: entry)
+    }
+  }
+
   var body: some View {
     ZStack {
       if accessory {
@@ -121,8 +132,7 @@ struct WidgetBox: View {
       } else {
         WStyle.background(for: entry.locked ? nil : entry.focus?.look)
       }
-      BRBWidgetRootView(entry: entry)
-        .environment(\.widgetFamily, family)
+      content
     }
     .frame(width: size.width, height: size.height)
     .clipShape(RoundedRectangle(cornerRadius: accessory ? 18 : 24, style: .continuous))
