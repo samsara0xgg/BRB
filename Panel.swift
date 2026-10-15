@@ -6,8 +6,8 @@ import LocalAuthentication
 import SwiftUI
 
 /// The menu-bar panel holds only what matters before stepping away (audit A1): the start button,
-/// where the Mac is, a note for the screen and the last few sessions, with what is on in the ⋯
-/// menu. Anything missing is listed on top and fixed in place (A2); everything else lives in Settings.
+/// where the Mac is, a note for the screen and the last few sessions, with Settings and Quit at the
+/// foot. Anything missing is listed on top and fixed in place (A2); everything else lives in Settings.
 final class Panel: NSObject, NSPopoverDelegate {
   let model: PanelModel
   /// The menu-bar button the panel hangs from.
@@ -711,6 +711,8 @@ private struct MainPage: View {
         NoteField(model: model)
           .padding(.top, 10)
         Recent(model: model)
+        Footer(model: model)
+          .padding(.top, 14)
       case .arming:
         MiniCountdown(model: model)
       case .armed, .triggered:
@@ -722,7 +724,7 @@ private struct MainPage: View {
   }
 }
 
-/// The tile, the name, one status chip and the ⋯ menu (audit A3).
+/// The tile, the name and one status chip (audit A3).
 private struct Header: View {
   @ObservedObject var model: PanelModel
   var title = "BRB"
@@ -738,9 +740,6 @@ private struct Header: View {
           .help(statusTip)
       }
       Spacer(minLength: 6)
-      if showsStatus && model.phase == .idle {
-        MoreButton(model: model)
-      }
     }
     .frame(height: 28)
   }
@@ -868,51 +867,46 @@ func replay(_ animation: Animation, _ set: @escaping (Bool) -> Void) {
   }
 }
 
-/// ⋯: Settings, how it works, the recordings, quit. A native menu, with its shortcuts and an icon on
-/// every item. What is on lives in the Ready chip's tooltip and Settings' Checks: read-only rows in a
-/// menu can only be drawn dimmed, and they read as broken buttons.
-private struct MoreButton: View {
+/// Settings on the left, Quit on the right: two quiet icons at the foot, each one click (allen: no ⋯
+/// and no system menu, like the menu-bar apps that end on a row of icons). Only shown while idle, so
+/// quitting never leaves the Mac unguarded. ⌘, and ⌘Q do the same from the app menu.
+private struct Footer: View {
   @ObservedObject var model: PanelModel
-  @State private var hover = false
 
   var body: some View {
-    Button(action: show) {
-      Image(systemName: "ellipsis")
-        .font(.system(size: 13, weight: .semibold))
+    HStack {
+      FootButton(symbol: "gearshape", title: L("Settings…"), turns: true) { model.onSettings(.general) }
+      Spacer()
+      FootButton(symbol: "power", title: L("Quit BRB")) { NSApp.terminate(nil) }
+    }
+  }
+}
+
+/// A gray icon that lights up under the pointer, on a round fill; the gear also turns a little.
+private struct FootButton: View {
+  let symbol: String
+  let title: String
+  var turns = false
+  let action: () -> Void
+  @State private var hover = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: symbol)
+        .font(.system(size: 14))
+        .rotationEffect(.degrees(turns && hover && !reduceMotion ? 45 : 0))
         .foregroundStyle(hover ? Color.primary : Color.secondary)
         .frame(width: 26, height: 26)
         .background(Circle().fill(hover ? Theme.fill : Color.clear))
         .contentShape(Circle())
     }
-    .buttonStyle(.plain)
+    .buttonStyle(Pressable(scale: 0.9))
     .onHover { hover = $0 }
-    .help(L("More"))
-    .accessibilityLabel(L("More"))
+    .animation(.spring(duration: 0.45, bounce: 0.3), value: hover)
+    .help(title)
+    .accessibilityLabel(title)
   }
-
-  private func show() {
-    let menu = NSMenu()
-    func item(_ symbol: String, _ title: String, _ key: String = "", _ run: @escaping () -> Void) {
-      let action = MenuAction(run)
-      let i = NSMenuItem(title: title, action: #selector(MenuAction.fire), keyEquivalent: key)
-      i.target = action
-      i.representedObject = action  // the item keeps its action alive
-      i.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
-      menu.addItem(i)
-    }
-    item("gearshape", L("Settings…"), ",") { model.onSettings(.general) }
-    item("questionmark.circle", L("How it works")) { model.showIntro() }
-    item("folder", L("Open Recordings Folder")) { model.reveal(nil) }
-    menu.addItem(.separator())
-    item("power", L("Quit BRB"), "q") { NSApp.terminate(nil) }
-    menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
-  }
-}
-
-final class MenuAction: NSObject {
-  let run: () -> Void
-  init(_ run: @escaping () -> Void) { self.run = run }
-  @objc func fire() { run() }
 }
 
 /// "Before guarding": only what is missing, each with the button that fixes it.

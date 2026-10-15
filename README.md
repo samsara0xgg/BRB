@@ -26,8 +26,8 @@ adds itself to your login items, and the panel opens by itself:
    a stranger, but stays silent. Unlock, or rest a finger on Touch ID, to stop. Test mode switches
    itself off afterwards.
 
-**How it works** at the bottom of the panel shows the cards again. To remove BRB, quit it from the
-panel, drag it to the Trash, and remove the lid rule with `sudo rm /etc/sudoers.d/brb`. Recordings
+The gear at the foot of the panel opens Settings, where **How it works** shows the cards again. To
+remove BRB, quit it with the power button next to the gear, drag it to the Trash, and remove the lid rule with `sudo rm /etc/sudoers.d/brb`. Recordings
 stay in `~/Movies/BRB/`. The log is at `~/Library/Logs/brb.log`.
 
 ### From source
@@ -187,4 +187,4 @@ launchctl bootout gui/$(id -u)/com.allen.guard-mode
 
 `./install.sh` brings it back, and `./uninstall.sh` removes it for good. For the copy in
 Applications, `pkill -TERM -x brb` does the same as `bootout`. If the Mac still won't sleep with the lid shut, run
-`sudo pmset -a disablesleep 0`. Quitting from the panel works only while it isn't guarding.
+`sudo pmset -a disablesleep 0`. Settings and Quit are there only while BRB isn't guarding.
