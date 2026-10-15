@@ -275,10 +275,12 @@ struct BRBRectangularView: View {
       HStack(spacing: 8) {
         WShield(look: s.look.shield, size: 28, mono: true).widgetAccentable()
         VStack(alignment: .leading, spacing: 1) {
-          Text(s.name).font(.headline).widgetAccentable().lineLimit(1)
-          Text(WText.line(s, now: entry.date)).font(.caption).lineLimit(1)
+          Text(WText.title(s, now: entry.date)).font(.headline).widgetAccentable().lineLimit(1)
+          Text(s.name).font(.caption).lineLimit(1)
           if let clock = WClockKind.of(s) {
             WClockView(kind: clock, now: entry.date, size: 12, color: Color.primary, width: nil, alignment: .leading)
+          } else {
+            Text(WText.line(s, now: entry.date)).font(.caption).lineLimit(1)
           }
         }
         Spacer(minLength: 0)
@@ -312,7 +314,7 @@ struct BRBInlineView: View {
     if entry.locked {
       Label("BRB · " + t("wv_needCloud"), systemImage: "lock.fill")
     } else if let s = entry.focus {
-      Label(s.name + " · " + s.plain(now: entry.date.ms), systemImage: symbol(s.look))
+      Label(s.plain(now: entry.date.ms) + " · " + s.name, systemImage: symbol(s.look))
     } else {
       Label("BRB · " + t("emptyDevT"), systemImage: "shield")
     }

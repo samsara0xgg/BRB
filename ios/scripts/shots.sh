@@ -88,21 +88,20 @@ shot zh-onb-welcome -scene empty -onb welcome "${ZH[@]}"
 if [ -n "$GALLERY" ]; then
   xcrun simctl install "$UDID" "$GALLERY"
   gshot() {
-    local name="$1"
-    shift
+    local out="$1" page="$2"
+    shift 2
     xcrun simctl terminate "$UDID" com.allen.brb.gallery >/dev/null 2>&1
-    xcrun simctl launch "$UDID" com.allen.brb.gallery -page "$name" "$@" >/dev/null || { echo "launch failed: $name"; return; }
+    xcrun simctl launch "$UDID" com.allen.brb.gallery -page "$page" "$@" >/dev/null || { echo "launch failed: $out"; return; }
     sleep 3
-    xcrun simctl io "$UDID" screenshot --type=png "$OUT/w-$name.png" >/dev/null 2>&1 || echo "shot failed: $name"
-    echo "shot w-$name"
+    xcrun simctl io "$UDID" screenshot --type=png "$OUT/w-$out.png" >/dev/null 2>&1 || echo "shot failed: $out"
+    echo "shot w-$out"
   }
-  for page in home1 home2 home3 lock live1 live2 island1 island2 island3; do gshot "$page"; done
-  gshot home1 -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN
-  mv "$OUT/w-home1.png" "$OUT/w-zh-home1.png" 2>/dev/null
-  gshot live1 -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN
-  mv "$OUT/w-live1.png" "$OUT/w-zh-live1.png" 2>/dev/null
-  gshot home1 -dark 0
-  mv "$OUT/w-home1.png" "$OUT/w-light-home1.png" 2>/dev/null
+  for page in home1 home2 home3 lock live1 live2 island1 island2 island3; do gshot "$page" "$page"; done
+  gshot zh-home1 home1 -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN
+  gshot zh-lock lock -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN
+  gshot zh-live1 live1 -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN
+  gshot light-home1 home1 -dark 0
+  gshot light-lock lock -dark 0
 fi
 
 # Smaller JPEGs, so a few dozen fit in a branch.

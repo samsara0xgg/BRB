@@ -187,7 +187,8 @@ struct WActionButton: View {
         }
         .buttonStyle(.plain)
       case .offline:
-        WPill(title: t("st_offline"), style: .ghost, height: height)
+        // The title already says offline; the pill says since when.
+        WPill(title: WText.line(snap, now: Date()), style: .ghost, height: height)
       case .idle:
         Button(intent: StartGuardingIntent(macID: snap.id)) {
           WPill(title: t("btn_start"), symbol: "shield.fill", style: .amber, height: height)

@@ -132,7 +132,7 @@ struct WidgetBox: View {
       } else {
         WStyle.background(for: entry.locked ? nil : entry.focus?.look)
       }
-      content
+      content.padding(accessory ? 0 : 16)  // the system adds this margin around a widget's content
     }
     .frame(width: size.width, height: size.height)
     .clipShape(RoundedRectangle(cornerRadius: accessory ? 18 : 24, style: .continuous))

@@ -59,3 +59,47 @@ jobs:
           git add -A
           git commit -q -m "screenshots ${{ github.event.pull_request.head.sha }}"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" HEAD:ci-shots-ios
+
+  watch:
+    runs-on: macos-26
+    timeout-minutes: 40
+    continue-on-error: true
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate the project
+        working-directory: ios
+        run: xcodegen
+      - name: Build the Watch app for the simulator
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project BRB.xcodeproj -scheme BRBWatch -configuration Debug \
+            -destination 'generic/platform=watchOS Simulator' -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO build 2>&1 | grep -E "error:|BUILD (SUCCEEDED|FAILED)" | sort -u | head -80
+      - name: Take the screenshots
+        run: |
+          find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name "*.app" | head
+          xcrun simctl list devices available | grep -i watch | head
+          ios/scripts/watch-shots.sh "$RUNNER_TEMP/dd/Build/Products/Debug-watchsimulator/BRBWatch.app" "$RUNNER_TEMP/wshots"
+          for f in "$RUNNER_TEMP"/wshots/*.png; do sips -s format jpeg -s formatOptions 85 "$f" --out "${f%.png}.jpg" >/dev/null && rm "$f"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: watch-screenshots
+          path: ${{ runner.temp }}/wshots
+      - name: Publish to the ci-shots-watch branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm -rf "$RUNNER_TEMP/pub" && mkdir "$RUNNER_TEMP/pub" && cd "$RUNNER_TEMP/pub"
+          git init -q -b ci-shots-watch
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          cp "$RUNNER_TEMP"/wshots/*.jpg .
+          echo "${{ github.event.pull_request.head.sha }}" > SHA
+          git add -A
+          git commit -q -m "watch screenshots ${{ github.event.pull_request.head.sha }}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" HEAD:ci-shots-watch

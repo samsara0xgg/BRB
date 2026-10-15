@@ -63,10 +63,13 @@ final class WatchModel: ObservableObject {
   private var acks: [String: CommandResult] = [:]
   private var photoLoading: Set<String> = []
   private var poller: Task<Void, Never>?
+  /// Canned Macs for screenshots (`-wdemo`): no phone, no relay.
+  private var demo = false
 
   init() {
     WatchLink.shared.onChange = { [weak self] in self?.reload() }
     reload()
+    if let scene = UserDefaults.standard.string(forKey: "wdemo") { loadDemo(scene) }
   }
 
   // MARK: Reading
@@ -107,6 +110,7 @@ final class WatchModel: ObservableObject {
 
   /// Reads the Macs and the Pro flag the iPhone sent (saved by `WatchLink`).
   func reload() {
+    if demo { return }
     let paired = Library.macs()
     let ids = Set(paired.map { $0.id })
 
@@ -151,6 +155,7 @@ final class WatchModel: ObservableObject {
   // MARK: Scene
 
   func sceneChanged(_ phase: ScenePhase) {
+    if demo { return }
     switch phase {
     case .active:
       active = true
@@ -412,5 +417,55 @@ final class WatchModel: ObservableObject {
   private func buzz(_ type: WKHapticType) {
     guard active else { return }
     WKInterfaceDevice.current().play(type)
+  }
+}
+
+// MARK: - Demo
+
+extension WatchModel {
+  /// `-wdemo idle|armed|arming|warn|siren|offline|done|many|nopro|empty` shows canned Macs without a phone or the
+  /// relay, for screenshots. Nothing happens without the argument.
+  func loadDemo(_ scene: String) {
+    demo = true
+    let t0 = nowMs()
+    func paired(_ id: String, _ name: String) -> PairedMac {
+      PairedMac(id: id, token: "demo", host: RelayDefaults.host, name: name, model: "MacBook Pro", custom: nil, added: t0)
+    }
+    func snap(_ id: String, _ name: String, online: Bool = true, _ state: [String: Any]) -> MacSnapshot {
+      let view = RelayView(json: ["v": 3, "level": "owner", "online": online, "state": state])
+      return MacSnapshot(id: id, name: name, model: "MacBook Pro", view: view, lastSeen: t0, fetched: t0)
+    }
+    func state(_ phase: String, _ extra: [String: Any] = [:]) -> [String: Any] {
+      let info: [String: Any] = ["name": "Allen's MacBook Pro", "model": "MacBook Pro 14″", "batt": 82, "chg": false]
+      var s: [String: Any] = ["phase": phase, "since": t0 - 25 * 60_000, "place": "cafe", "mac": info]
+      for (k, v) in extra { s[k] = v }
+      return s
+    }
+    let name = "Allen's MacBook Pro"
+    let main: MacSnapshot
+    switch scene {
+    case "armed": main = snap("d1", name, state("armed", ["bumps": 2]))
+    case "arming": main = snap("d1", name, state("arming", ["armEnd": t0 + 14_000]))
+    case "warn":
+      main = snap(
+        "d1", name, state("triggered", ["at": t0 - 4_000, "trigger": "touch", "stage": "soft", "softEnd": t0 + 6_000]))
+    case "siren":
+      main = snap("d1", name, state("triggered", ["at": t0 - 56_000, "trigger": "lift", "siren": true, "stage": "siren"]))
+    case "offline": main = snap("d1", name, online: false, state("armed"))
+    default: main = snap("d1", name, state("idle", ["lastEnd": t0 - 2 * 3_600_000]))
+    }
+    var list = [paired("d1", name)]
+    var all = ["d1": main]
+    if scene == "many" {
+      list.append(paired("d2", "Studio MacBook Air"))
+      all["d2"] = snap("d2", "Studio MacBook Air", state("armed"))
+    }
+    macs = scene == "empty" ? [] : list
+    pro = scene != "nopro"
+    snaps = all
+    known = Set(all.keys)
+    live = Set(all.keys)
+    selected = "d1"
+    if scene == "done" { finished["d1"] = WFinished(by: "phone", endedAt: t0, test: false) }
   }
 }
