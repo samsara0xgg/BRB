@@ -448,7 +448,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
         if !degraded && Date().timeIntervalSince(since) >= 15 {
           degraded = true
           render()
-          live.update(event: "warning", key: "motion") { if holding { $0.health = health } }
+          live.update(event: "warning", key: "motion") { if self.holding { $0.health = self.health } }
           if Push.enabled { Push.warning(L("The motion sensor stopped. The lid, the charger and touch still count."), test: test) }
         }
       } else if silentSince != nil {
