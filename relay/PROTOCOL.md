@@ -268,3 +268,30 @@ Devices and push
 State snapshot
 - `GET /state/<id>`: no `t` is the status view, as a socket would show; a `t` that matches nothing is `403`; `404` is for a room that
   never had an owner or a state; a reset room answers `200` with `level: "reset"` so a widget can tell. `OPTIONS` answers `204`.
+
+The Mac (`Live.swift`, `GuardApp.swift`, `Pairing.swift`)
+- The Mac says `hello` with `v: 3` and keeps its socket open between sessions only while a phone is paired (`phonePaired`, set when
+  `{"paired"}` arrives) or a pairing code is live (the claim arrives on that socket, and the code is renewed and listened for until it
+  expires, also after Settings is closed). An unpaired Mac behaves as before: the socket is open from the countdown to the disarm.
+  `mac` and `health` are sent only while the socket is held for a phone. A reset (from the panel, Settings or the phone) unpairs every phone.
+- Idle state (`phase: "idle"`): `since` and `armEnd` are 0, `lastEnd` comes from the history, `test` is whether the next run is a test,
+  `camera` is the camera check, `vol` is 10–100 (the Mac's slider), the last session's `trigger`, `at`, `bumps` and `events` stay until the
+  next session starts. It is re-sent, at most once per change, 0.3 s after a preference changes, when the checks change, and every 5 minutes
+  (the battery and the checks). `health.mot` is `false` only after the motion sensor went quiet during a session.
+- `stage`: `soft`, `siren` and `hushed` are sent; `back` never is (the Mac has no put-back detection). `softEnd` is the trigger plus 10 s.
+  `carried` is true while the movement is as sustained as a lift needs, whatever the tilt, and never on the go. The state with the new
+  stage and the event that explains it (`siren`, `lift`, `hushed`, `calledoff`, `disarmed`, `cancelled`, `warning`, `paired`) go out as one frame.
+- `hush`: from `soft` it calls the alarm off (event `calledoff`), from `siren` it silences it (event `hushed`); both leave `stage: "hushed"`,
+  `siren: false`, the Mac locked and filming. After 5 s, a `lifted` or `tilted` motion hit sounds the siren again (`stage: "siren"`, event `lift`
+  with the hit as `k`); the rest position is taken again at the hush, so only a new movement counts. The lid, the charger and keys do not.
+- `stop`: cancels a countdown (`escape`, so a `cancelled` event) or ends a guard or an alarm (`phone`). `disarm` acts only on a `triggered` Mac.
+  `hush`, `stop` and `disarm` that find nothing to do answer `ok: true`. `by` of a `disarm` is logged, not checked: the Mac cannot know.
+- `start`: refused with `busy` (not idle), `locked` (the screen is locked) or `not-ready` (the checks the panel's start button makes, run
+  again at that moment). `note` is cut to the 24 characters the Mac's note takes, `vol` to 10–100. `test` sets test mode for this run only.
+  `set`: while a session runs only `note` is taken (and shown on the frosted screen); with `place`, `vol` or `test` the whole command
+  is refused with `busy`. `reset` is answered first, then the link is made new. An unknown or malformed command is answered `bad-command`.
+- Sessions: sent at every disarm of a guarded session (and when the sensors were silent), `kind` is `test`, `alarm` or `quiet`, `how` is the
+  Mac's own disarm word (`phone` for the phone's), `photos` are the times the photos were uploaded. A session that could not be sent waits
+  in memory for the next connection (not across a restart).
+- `mac.model` is the registry's product name where it has one, otherwise the model identifier ("Mac14,5"). `mac.chg` is "battery charging".
+- The `live` command-line tool says `hello` with `v: 2`, so it does not take the commands and the pairing notice meant for the app.
