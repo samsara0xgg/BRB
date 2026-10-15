@@ -203,3 +203,68 @@ A v2 Mac keeps working: it never says `hello` with `v: 3`, sends no `mac`, `heal
 treats `siren` as `stage: "siren"` and a missing `stage` in `triggered` as `soft`. The v2 phone page ignores new fields.
 The app needs a v3 Mac only for commands, history and the device cards; against a v2 Mac it shows
 the same screens read-only and says "update BRB on your Mac".
+
+## Decisions
+
+What the first implementation of this document (`worker.js`, `apns.js`, the Mac's `Live.swift`) settled where the
+text above was silent or ambiguous. Field names are as written above.
+
+State
+- `state.v` is the Mac's own version: `3` from a v3 Mac, `2` from an older one (that is how the app knows to offer no commands).
+  The top-level `v` of what a phone receives is the relay's, always `3`.
+- A field an old Mac does not send is `null` for `mac`, `health`, `lastEnd`, `at`, `softEnd` and `stage` outside an alarm, `0` for
+  `armEnd` and `bumps`, `100` for `vol`. `mac.batt` is `null` for a Mac without a battery. `health.*` is `true` only when the Mac said `true`.
+- The `pass` level sees the alarm (`trigger`, `stage`, `events`, …) but `mac`, `health` and `lastEnd` are `null`.
+- Camera frames are relayed only while `phase` is `triggered`, whoever is watching.
+
+Pairing
+- `POST /pair/<key>` also makes `token` the room's owner token, so a phone that claims before the Mac ever connected is the owner
+  (and nobody else is). It answers `410` for a room that was reset, and it obeys `CAM_IDS` like `/cam`.
+- Offers are kept an hour past their expiry so `/claim` can say `410 expired` instead of `404 invalid`. An expired code counts as a
+  wrong try. A `429` carries `Retry-After`. On IPv6 the limit is per /64. Codes are compared against every live offer without
+  stopping at a match. Digits may be typed with spaces; the QR string is case-insensitive.
+- `PAIR_TTL_MS`, `PAIR_TRIES` and `PAIR_WINDOW_MS` (vars) override 10 minutes, 8 and 10 minutes, for tests.
+- `{"paired"}` is delivered with the Mac's `hello` when `hello.v >= 3` (or at once if it is online), then forgotten. `POST /wipe` also
+  forgets the room's open offer.
+
+Commands
+- Only a room whose owner token is known takes commands (a room from before v2, where everyone is "owner", takes none). `id` is
+  1 to 24 characters; fields not used by a kind are dropped; `place` must be a known place, `vol` is clamped to 0–100, `note` to 48.
+- The queue is delivered when the Mac says `hello` with `v >= 3`, not merely when it connects. A command that outlived its TTL
+  is dropped and the owner's phones get `{"ack": {"id", "ok": false, "why": "expired"}}`. `START_TTL_MS` and `CMD_TTL_MS` (vars)
+  override 30 s and 10 minutes, for tests.
+- The Mac's `ack` goes to every owner viewer, including for commands sent with `POST /cmd`. A `{"cmd"}` frame from a viewer that
+  may not send commands, or with a malformed command, is answered to that viewer with `{"ack": {"id", "ok": false, "why": "forbidden"}}`
+  or `"bad-command"`. `why` is at most 24 characters.
+
+History and photos
+- A session without an `id` (`[A-Za-z0-9_-]`, at most 24) or without an `end` is ignored. `GET /h/<id>` lists only the photos the room still
+  has. `DELETE /h/<id>/<session>` removes the session, the photos it lists and any photo taken between its `start` and `end`; it
+  and `DELETE /h/<id>` answer `200 {"ok": true}` whether or not there was something to delete.
+- The relay keeps at most 6 photos per alarm (per `pass`), as v2 kept 6 in all. A photo older than the retention (7 days, 30 with a
+  Pro device) is accepted and dropped at once; the rest go when the room's Durable Object alarm fires, or when the Pro flag changes.
+
+Devices and push
+- Missing keys of `events` default to `siren`, `back`, `disarm`, `sensor`: `true`, `guard`: `false`. The registration may also carry
+  `tz` (an IANA zone, `p_dis`'s time of day is shown in it); without it the relay uses the zone of the request, then UTC. Tokens are hex (16 to
+  400 digits), `la` and `laStart` may be `null`. The seventh device replaces the one that registered longest ago. A token that
+  Apple answers `410` for is set to `null`.
+- Apart from the alarm alert, an alert carries `loc-key` (and `loc-args`) and no `title-loc-key`; the app shows its own name as the
+  title. `p_siren` is also sent when a hushed or put-back Mac sounds again. `p_dis` follows an alarm (`triggered` to `idle`);
+  `p_start` and `p_end` are for the quiet case (`armed`, and `armed` to `idle`) and only with `events.guard`. `p_sensor` follows a `warning` event
+  and `events.sensor`. A test run's alarm alert is `time-sensitive` even for a `crit` device and has `"test": true`.
+  Alerts with `passive` have priority 5 and expire after 5 minutes, the others priority 10 and one hour.
+- The held alarm alert is a Durable Object alarm (it survives the object being evicted); a photo with the alarm's `pass` releases it
+  early, and a state that arrives meanwhile releases it first so the order holds.
+- Live Activity: `look` is `clear` when idle, `offline` when the Mac is not connected during a session, `arming`, `armed`, `test`,
+  `partial` (no camera or `health.mot` false), and for an alarm `warn` (soft), `alarm` (siren), `back`, `hushed`. `by` on `end` is
+  `phone` for a `phone` disarm, `fingerprint` for `fingerprint`, `unlock` and `password`, otherwise `null`. Updates are also sent
+  when the Mac goes offline or returns and when a photo arrives, and are skipped when nothing the activity shows changed. A `start`
+  carries an `alert` (`p_start`, or the alarm's) because Apple wants one to start an activity by push.
+- `POST /test-push` sends a plain `title`/`body` alert (`BRB`, in the device's `lang`) so it needs no string in the app. It answers
+  `{"ok": true, "sent": n, "failed": m}`, or `501 {"error": "push not configured"}` without the APNS_* secrets.
+- `APNS_URL` (var, for tests) replaces Apple's host.
+
+State snapshot
+- `GET /state/<id>`: no `t` is the status view, as a socket would show; a `t` that matches nothing is `403`; `404` is for a room that
+  never had an owner or a state; a reset room answers `200` with `level: "reset"` so a widget can tell. `OPTIONS` answers `204`.

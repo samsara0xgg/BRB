@@ -1,8 +1,18 @@
 {
-  // Relays the armed Mac's camera to the owner's phone browser. Deploy: npx wrangler deploy
+  // Relays the armed Mac's camera to the owner's phone, and the iPhone app's commands to the Mac.
+  // Deploy: npx wrangler deploy. Optional APNs secrets for push to the app: npx wrangler secret put
+  // APNS_KEY (and APNS_KEY_ID, APNS_TEAM_ID, APNS_TOPIC).
   "name": "guardmode-relay",
   "main": "worker.js",
   "compatibility_date": "2026-09-01",
-  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Room" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }]
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOMS", "class_name": "Room" },
+      { "name": "CODES", "class_name": "Codes" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["Room"] },
+    { "tag": "v2", "new_sqlite_classes": ["Codes"] }
+  ]
 }
