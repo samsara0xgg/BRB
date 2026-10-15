@@ -6,8 +6,8 @@ import LocalAuthentication
 import SwiftUI
 
 /// The menu-bar panel holds only what matters before stepping away (audit A1): the start button,
-/// where the Mac is, a note for the screen and the last few sessions, and a gear for Settings. Anything
-/// missing is listed on top and fixed in place (A2); everything else lives in Settings.
+/// where the Mac is, a note for the screen and the last few sessions, with Settings and Quit at the
+/// foot. Anything missing is listed on top and fixed in place (A2); everything else lives in Settings.
 final class Panel: NSObject, NSPopoverDelegate {
   let model: PanelModel
   /// The menu-bar button the panel hangs from.
@@ -711,6 +711,8 @@ private struct MainPage: View {
         NoteField(model: model)
           .padding(.top, 10)
         Recent(model: model)
+        Footer(model: model)
+          .padding(.top, 14)
       case .arming:
         MiniCountdown(model: model)
       case .armed, .triggered:
@@ -722,7 +724,7 @@ private struct MainPage: View {
   }
 }
 
-/// The tile, the name, one status chip and the gear (audit A3).
+/// The tile, the name and one status chip (audit A3).
 private struct Header: View {
   @ObservedObject var model: PanelModel
   var title = "BRB"
@@ -738,9 +740,6 @@ private struct Header: View {
           .help(statusTip)
       }
       Spacer(minLength: 6)
-      if showsStatus && model.phase == .idle {
-        SettingsButton(model: model)
-      }
     }
     .frame(height: 28)
   }
@@ -868,19 +867,35 @@ func replay(_ animation: Animation, _ set: @escaping (Bool) -> Void) {
   }
 }
 
-/// The gear: one click opens Settings (⌘, too). It used to be ⋯ with a native menu of four items;
-/// how it works, the recordings folder and quitting all live in Settings now (allen: one click,
-/// and the system menu looked out of place). The gear turns a little under the pointer.
-private struct SettingsButton: View {
+/// Settings on the left, Quit on the right: two quiet icons at the foot, each one click (allen: no ⋯
+/// and no system menu, like the menu-bar apps that end on a row of icons). Only shown while idle, so
+/// quitting never leaves the Mac unguarded. ⌘, and ⌘Q do the same from the app menu.
+private struct Footer: View {
   @ObservedObject var model: PanelModel
+
+  var body: some View {
+    HStack {
+      FootButton(symbol: "gearshape", title: L("Settings…"), turns: true) { model.onSettings(.general) }
+      Spacer()
+      FootButton(symbol: "power", title: L("Quit BRB")) { NSApp.terminate(nil) }
+    }
+  }
+}
+
+/// A gray icon that lights up under the pointer, on a round fill; the gear also turns a little.
+private struct FootButton: View {
+  let symbol: String
+  let title: String
+  var turns = false
+  let action: () -> Void
   @State private var hover = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
-    Button { model.onSettings(.general) } label: {
-      Image(systemName: "gearshape")
-        .font(.system(size: 13, weight: .medium))
-        .rotationEffect(.degrees(hover && !reduceMotion ? 45 : 0))
+    Button(action: action) {
+      Image(systemName: symbol)
+        .font(.system(size: 14))
+        .rotationEffect(.degrees(turns && hover && !reduceMotion ? 45 : 0))
         .foregroundStyle(hover ? Color.primary : Color.secondary)
         .frame(width: 26, height: 26)
         .background(Circle().fill(hover ? Theme.fill : Color.clear))
@@ -889,8 +904,8 @@ private struct SettingsButton: View {
     .buttonStyle(Pressable(scale: 0.9))
     .onHover { hover = $0 }
     .animation(.spring(duration: 0.45, bounce: 0.3), value: hover)
-    .help(L("Settings…"))
-    .accessibilityLabel(L("Settings…"))
+    .help(title)
+    .accessibilityLabel(title)
   }
 }
 

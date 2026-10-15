@@ -231,12 +231,6 @@ private struct GeneralPane: View {
           Button(L("Show again"), action: model.onIntro)
             .controlSize(.small)
         }
-        RowDivider()
-        // Settings only opens while nothing is guarded, so quitting here never leaves the Mac open.
-        SettingsRow(title: L("Quit BRB"), sub: L("It starts again at your next login")) {
-          Button(L("Quit")) { NSApp.terminate(nil) }
-            .controlSize(.small)
-        }
       }
       Text(verbatim: "BRB \(version) · Be Right Back")
         .font(Theme.label)
