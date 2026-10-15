@@ -1,0 +1,45 @@
+/* Widgets, the Live Activity, the Dynamic Island, the control, App Intents and the sentences they say.
+   Looked up by t() after Localizable.strings; the intents' titles name this table explicitly. */
+
+/* Widget gallery */
+"wi_name" = "Guard status";
+"wi_desc" = "See whether your Mac is guarded, and start or stop it.";
+"wg_recent" = "Latest";
+"wi_updated" = "Updated %1$@";
+"wi_warnIn" = "Siren in";
+
+/* Shortcuts: actions and their parameters */
+"wi_macType" = "Mac";
+"wi_p_mac" = "Mac";
+"wi_start_title" = "Start guarding";
+"wi_start_desc" = "Starts guarding one of your Macs.";
+"wi_stop_title" = "Stop guarding";
+"wi_stop_desc" = "Stops guarding, or disarms an alarm. Your phone has to be unlocked.";
+"wi_cancel_title" = "Cancel the countdown";
+"wi_hush_title" = "Stop the siren";
+"wi_hush_desc" = "Silences the siren on a Mac. It stays locked and keeps filming.";
+"wi_status_title" = "Get guard status";
+"wi_status_desc" = "Tells you whether your Macs are guarded.";
+"wi_latest_title" = "Get the latest session";
+"wi_latest_desc" = "Tells you how your last guarded session went.";
+
+/* Control */
+"wi_set_title" = "Guarding";
+"wi_control_name" = "Guarding";
+"wi_control_desc" = "Start or stop guarding your Mac.";
+
+/* What an action answers */
+"wi_needsPro" = "Starting, stopping and silencing need BRB Pro.";
+"wi_noMac" = "No Mac is paired yet. Open BRB to pair one.";
+"wi_already" = "%1$@ is already guarding.";
+"wi_failed" = "Couldn’t reach %1$@.";
+"wi_started" = "%1$@ will start guarding in a few seconds.";
+"wi_notStarted" = "%1$@ didn’t start guarding. Check its permissions in BRB on the Mac.";
+"wi_stopped" = "%1$@ stopped guarding.";
+"wi_notGuarding" = "%1$@ isn’t guarding.";
+"wi_hushed" = "Siren stopped on %1$@.";
+"wi_noAlarm" = "No Mac is sounding an alarm.";
+"wi_unconfirmed" = "%1$@ hasn’t confirmed yet.";
+"wi_status" = "%1$@: %2$@. %3$@.";
+"wi_noSessions" = "No sessions yet.";
+"wi_latest" = "Latest session on %1$@: %2$@, %3$@.";
