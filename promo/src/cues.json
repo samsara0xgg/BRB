@@ -1,0 +1,21 @@
+{
+  "fps": 30,
+  "duration": 30,
+  "bpm": 120,
+  "intro": { "start": 0, "end": 2.5, "w1": 0.18, "w2": 0.4, "w3": 0.62, "collapse": 1.22, "shield": 1.78, "toMenu": 2.12 },
+  "setup": { "start": 2.5, "end": 5.0 },
+  "arm": {
+    "start": 5.0, "end": 8.5,
+    "clickIcon": 5.36, "panelOpen": 5.4, "clickStart": 6.18, "panelClose": 6.3,
+    "frost": 6.36, "count": 6.42, "step": 0.29, "sign": 7.88
+  },
+  "guard": { "start": 8.5, "end": 11.0, "wipe": 10.52 },
+  "touch": { "start": 11.0, "end": 12.6, "tap": 11.12, "flood": 11.2 },
+  "lift": { "start": 12.6, "end": 14.0, "up": 12.64, "siren": 12.7 },
+  "phone": { "start": 14.0, "end": 18.0, "island": 14.42, "tapOpen": 15.28, "page": 15.36 },
+  "putback": { "start": 18.0, "end": 20.0, "down": 18.04, "thud": 18.38 },
+  "touchid": { "start": 20.0, "end": 20.9, "press": 20.22, "ok": 20.42 },
+  "welcome": { "start": 20.9, "end": 23.5, "clear": 20.92, "sign": 21.15, "shrink": 22.75, "land": 23.2 },
+  "bento": { "start": 23.5, "end": 27.0 },
+  "end": { "start": 27.0, "end": 30.0, "icon": 27.08, "word": 27.38, "tag": 27.75, "cta": 28.15, "fade": 29.55 }
+}
