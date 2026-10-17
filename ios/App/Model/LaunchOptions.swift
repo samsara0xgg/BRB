@@ -12,7 +12,14 @@ struct LaunchOptions {
   }
   /// mac, alarm, records, record, settings, privacy, faq, start, paywall, share, evidence
   var open: String? { d.string(forKey: "open") }
-  var pro: Bool { d.bool(forKey: "pro") }
+  /// Debug builds only: in a release build neither a launch argument nor a stray default unlocks Pro.
+  var pro: Bool {
+    #if DEBUG
+      return d.bool(forKey: "pro")
+    #else
+      return false
+    #endif
+  }
   var notifOff: Bool { d.bool(forKey: "notifOff") }
   var onboardingStep: Onboarding.Step? { d.string(forKey: "onb").flatMap(Onboarding.Step.init(rawValue:)) }
   /// Page state to show: loading, error, offline (the phone's own network).
