@@ -44,6 +44,7 @@ jobs:
           plutil -lint ~/Library/LaunchAgents/com.allen.guard-mode.plist
           grep -q "$dir/build/BRB.app" ~/Library/LaunchAgents/com.allen.guard-mode.plist
           launchctl print "gui/$(id -u)/com.allen.guard-mode" | grep -q "state = running"
+          if pgrep -f brb-relaunch; then echo "launchd restarts this copy; no watcher wanted" >&2; exit 1; fi
           tail -5 ~/Library/Logs/brb.log
           ./uninstall.sh < /dev/null
           test ! -e ~/Library/LaunchAgents/com.allen.guard-mode.plist
@@ -70,7 +71,17 @@ jobs:
           pgrep -x brb
           cat ~/Library/Logs/brb.log
           grep -q "login items" ~/Library/Logs/brb.log
+          grep -q "relaunch watcher started" ~/Library/Logs/brb.log
+          # A crash or kill -9 brings this copy back, as launchd does for install.sh's; SIGTERM ends it.
+          first=$(pgrep -x brb)
+          kill -9 "$first"
+          sleep 15
+          second=$(pgrep -x brb)
+          test "$second" != "$first"
           pkill -TERM -x brb
+          sleep 5
+          if pgrep -x brb; then echo "came back after SIGTERM" >&2; exit 1; fi
+          if pgrep -f brb-relaunch; then echo "watcher left running" >&2; exit 1; fi
 
   # The iPhone app, its widgets and notification extension, and the Apple Watch app. No signing: this
   # only proves it compiles and its tests pass. The project is generated from ios/project.yml.

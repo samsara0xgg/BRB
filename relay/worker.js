@@ -27,6 +27,7 @@ const HEX = /^[0-9a-fA-F]{16,400}$/;
 const MAX_FRAME = 200_000;
 const MAX_PHOTO = 300_000;
 const PHOTOS_PER_ALARM = 6;
+const PHOTOS_PER_ROOM = PHOTOS_PER_ALARM * 30;  // a pass is any string the camera sends, so cap the room too
 const SESSIONS_KEPT = 30;
 const QUEUE_KEPT = 8;
 const DEVICES_KEPT = 6;
@@ -394,8 +395,8 @@ export class Room extends DurableObject {
   level(t) {
     if (this.wiped) return "reset";
     if (!this.owner) return "owner";
-    if (t && t === this.owner) return "owner";
-    if (t && this.state?.pass && t === this.state.pass && this.state.phase === "triggered") return "pass";
+    if (t && same(t, this.owner)) return "owner";
+    if (t && this.state?.pass && same(t, this.state.pass) && this.state.phase === "triggered") return "pass";
     if (t && this.oldPasses.includes(t)) return "expired";
     return "status";
   }
@@ -535,6 +536,7 @@ export class Room extends DurableObject {
   }
 
   async storePhoto(request, url) {
+    if (this.wiped) return text("reset", 410);
     const t = Number(url.searchParams.get("t"));
     const pass = url.searchParams.get("pass") ?? "";
     if (!Number.isSafeInteger(t) || t <= 0) return text("bad time", 400);
@@ -545,6 +547,7 @@ export class Room extends DurableObject {
     const sql = this.ctx.storage.sql;
     sql.exec("INSERT OR REPLACE INTO photos (t, pass, data) VALUES (?, ?, ?)", t, kept, data);
     sql.exec("DELETE FROM photos WHERE pass = ? AND t NOT IN (SELECT t FROM photos WHERE pass = ? ORDER BY t DESC LIMIT ?)", kept, kept, PHOTOS_PER_ALARM);
+    sql.exec("DELETE FROM photos WHERE t NOT IN (SELECT t FROM photos ORDER BY t DESC LIMIT ?)", PHOTOS_PER_ROOM);
     this.purge();
     if (this.pending && this.pending.pass === kept) {
       await this.flush(t);
@@ -708,8 +711,9 @@ export class Room extends DurableObject {
       const device = this.devices.find((d) => d.dev === push.dev);
       return { push, result: device ? await apns.sendPush(this.env, device, push) : null };
     }));
-    // Apple says this token is gone for good: stop asking.
-    const dead = results.filter(({ result }) => result?.status === 410);
+    // Apple says this token is gone for good, or the activity it updated just ended: stop using it,
+    // so the next session starts a new activity with laStart instead of updating the old one.
+    const dead = results.filter(({ push, result }) => result?.status === 410 || (push.field === "la" && push.body?.aps?.event === "end"));
     if (!dead.length) return;
     for (const { push } of dead) {
       const device = this.devices.find((d) => d.dev === push.dev);

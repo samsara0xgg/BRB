@@ -174,6 +174,7 @@ describe("v2 flows", () => {
     assert.equal((await again.waitFor((m) => m.level)).level, "reset");
     assert.equal((await cmd(r, r.token, { id: "c1", k: "hush" })).status, 403, "nothing is left to command");
     assert.equal((await relay.http("POST", `/pair/${r.key}`, { body: { token: r.token } })).status, 410, "a wiped room cannot pair");
+    assert.equal((await upload(r, Date.now(), pass)).status, 410, "nor keep photos");
   });
 
   test("unknown routes and tokens are not found", async () => {

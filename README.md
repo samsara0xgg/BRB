@@ -185,7 +185,7 @@ Then the earlier live steps, all in test mode except the siren:
 
 ## Emergency stop
 
-`kill -9` relaunches the app and resumes the alarm. `bootout` sends SIGTERM, which disarms: it
+`kill -9` relaunches the app and resumes the alarm (install.sh's agent does that, and for the copy in Applications a small watcher BRB starts with itself). `bootout` sends SIGTERM, which disarms: it
 restores the volume and lets the Mac sleep again, and the app stays down:
 
 ```sh

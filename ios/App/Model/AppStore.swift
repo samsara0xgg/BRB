@@ -147,6 +147,9 @@ final class AppStore {
       for m in macs { backend.attach(m); Task { await backend.refresh(m) } }
       refreshNotificationStatus()
       Task { await entitlements.refresh() }
+      // A registration lost to a bad network at pairing is sent again; without a token yet, the
+      // token's own callback does it.
+      if pushToken != nil { pushRegistrar.registerAll() }
     }
   }
 

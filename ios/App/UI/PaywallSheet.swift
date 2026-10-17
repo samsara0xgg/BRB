@@ -180,7 +180,9 @@ struct PaywallSheet: View {
   }
 
   private func buy() {
-    if store.isDemo {
+    // App Review looks at the demo, and must meet the real purchase there: only without an App Store
+    // behind it (the simulator, screenshots) does the demo pretend.
+    if store.isDemo && store.entitlements.product == nil {
       store.entitlements.unlockForDemo()
       store.show(t("subscribed"), "star.fill")
       dismiss()

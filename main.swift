@@ -66,6 +66,7 @@ case "snapshot": snapshotCommand(args.count > 1 ? args[1] : "armed", out: args.c
 case nil:
   logToFile()
   trimLog()
+  Relaunch.watch()
   let app = NSApplication.shared
   app.setActivationPolicy(.accessory)
   let delegate = GuardApp()

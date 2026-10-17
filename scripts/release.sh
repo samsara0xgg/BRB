@@ -23,6 +23,7 @@ else
   identity=${IDENTITY:-$(security find-identity -v -p codesigning | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)}
   [ -n "$identity" ] || { echo "No Developer ID Application certificate in the keychain." >&2; exit 1; }
   command -v gh >/dev/null || { echo "Install the GitHub CLI first: brew install gh, then gh auth login." >&2; exit 1; }
+  ! gh release view "v$VERSION" >/dev/null 2>&1 || { echo "v$VERSION is out already: bump CFBundleShortVersionString and CFBundleVersion in Info.plist." >&2; exit 1; }
 fi
 
 notarize() {
