@@ -158,6 +158,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
     source.setEventHandler { [weak self] in
       self?.disarm(.stopped, exiting: true)
+      Relaunch.standDown()
       exit(0)
     }
     source.resume()
@@ -230,6 +231,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
 
   func applicationWillTerminate(_ note: Notification) {
     if phase != .idle { disarm(.stopped, exiting: true) }
+    Relaunch.standDown()
   }
 
   @objc private func statusClicked() {
@@ -299,6 +301,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     stopIconAnimation()
     settings.close()
     Recorder.prune()
+    trimLog()  // a menu-bar app runs for weeks between launches
     phase = .arming
     setSleepDisabled(true)
     startWatching()
@@ -987,7 +990,12 @@ final class GuardApp: NSObject, NSApplicationDelegate {
         if !app.armedOnAC { log("charger plugged in while armed; unplugging it now triggers") }
         app.armedOnAC = true
       } else if app.armedOnAC {
-        app.fire(.charger, "charger unplugged")
+        // A loose power strip or a dock renegotiating drops the charger for a moment: only one
+        // that stays out counts.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+          guard app.phase == .armed, app.armedOnAC, !GuardApp.onAC() else { return }
+          app.fire(.charger, "charger unplugged")
+        }
       }
     }, me)?.takeRetainedValue() else { log("power-source notifications unavailable"); return }
     CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)

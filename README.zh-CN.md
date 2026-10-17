@@ -122,7 +122,7 @@ cd BRB
 
 ## 紧急停止
 
-`kill -9` 会让 App 重启并继续报警。`bootout` 发送 SIGTERM，会解除警戒：恢复音量、让电脑能正常睡眠，并且不再启动：
+`kill -9` 会让 App 重启并继续报警（install.sh 装的由系统重启，「应用程序」里那份由 BRB 自带的一个小守护进程重启）。`bootout` 发送 SIGTERM，会解除警戒：恢复音量、让电脑能正常睡眠，并且不再启动：
 
 ```sh
 launchctl bootout gui/$(id -u)/com.allen.guard-mode
