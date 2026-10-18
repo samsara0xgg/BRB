@@ -49,7 +49,7 @@ jobs:
             for lang in en zh; do
               local extra=()
               [ $lang = zh ] && extra=(-AppleLanguages "(zh-Hans)" -AppleLocale zh_CN)
-              xcrun simctl terminate "$udid" "$bundle" >/dev/null 2>&1
+              xcrun simctl terminate "$udid" "$bundle" >/dev/null 2>&1 || true  # ESRCH when it is not running
               xcrun simctl launch "$udid" "$bundle" "$@" "${extra[@]}" >/dev/null || { echo "launch failed: $name $lang"; continue; }
               sleep 5
               xcrun simctl io "$udid" screenshot --type=png "$out/$lang-$name.png" >/dev/null 2>&1 && echo "shot $lang-$name"
@@ -67,6 +67,16 @@ jobs:
           shot 10-island com.allen.brb.gallery -page island1
           shot 11-home com.allen.brb.gallery -page home1
           sips -g pixelWidth -g pixelHeight "$out/en-1-alarm.png"
+      - name: The Mac app under its new name (for review)
+        run: |
+          SIGN_IDENTITY=- ./build.sh > /dev/null
+          bin="build/Back in 5.app/Contents/MacOS/brb"
+          out="$RUNNER_TEMP/shots"
+          for what in panel intro settings settings-phone; do
+            "$bin" snapshot $what "$out/mac-en-$what.png" || echo "mac snapshot failed: en $what"
+            "$bin" snapshot $what "$out/mac-zh-$what.png" -AppleLanguages "(zh-Hans)" || echo "mac snapshot failed: zh $what"
+          done
+          "$bin" dmg-background "$out/mac-dmg" || echo "dmg background failed"
       - uses: actions/upload-artifact@v4
         with:
           name: appstore-screenshots

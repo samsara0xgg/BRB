@@ -1,5 +1,5 @@
 #!/bin/bash
-# Makes dist/BRB.dmg, the download in the README: BRB signed with your Developer ID and the
+# Makes dist/Back-in-5.dmg, the download in the README: Back in 5 signed with your Developer ID and the
 # hardened runtime, notarized and stapled, in a disk image that is signed, notarized and stapled
 # too, then published as the GitHub release for the version in Info.plist.
 #
@@ -13,8 +13,8 @@ cd "$(dirname "$0")/.."
 VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" Info.plist)
 NOTARY_PROFILE=${NOTARY_PROFILE:-Typlus}
 LOCAL=${LOCAL:-0}
-app=build/BRB.app
-dmg=dist/BRB.dmg
+app="build/Back in 5.app"
+dmg=dist/Back-in-5.dmg
 
 if [ "$LOCAL" = 1 ]; then
   identity=-
@@ -35,18 +35,18 @@ SIGN_IDENTITY="$identity" SIGN_FLAGS="$([ "$LOCAL" = 1 ] || echo --options runti
 mkdir -p dist
 if [ "$LOCAL" != 1 ]; then
   # The app gets its own ticket, so the copy dragged out of the disk image opens offline.
-  ditto -c -k --keepParent "$app" dist/BRB.zip
-  notarize dist/BRB.zip
+  ditto -c -k --keepParent "$app" dist/Back-in-5.zip
+  notarize dist/Back-in-5.zip
   xcrun stapler staple "$app"
   spctl -a -vv "$app"
 fi
 
-# A window that opens on BRB, an arrow and Applications, saying to drag one onto the other.
+# A window that opens on Back in 5, an arrow and Applications, saying to drag one onto the other.
 rm -f "$dmg" build/dmg-background*
 "$app/Contents/MacOS/brb" dmg-background build/dmg-background
 tiffutil -cathidpicheck build/dmg-background.png build/dmg-background@2x.png -out build/dmg-background.tiff 2> /dev/null
 [ -x build/venv/bin/dmgbuild ] || { python3 -m venv build/venv && build/venv/bin/pip install -q "dmgbuild>=1.6,<2"; }
-build/venv/bin/dmgbuild -s scripts/dmg-settings.py -D app="$app" -D background=build/dmg-background.tiff BRB "$dmg" > /dev/null
+build/venv/bin/dmgbuild -s scripts/dmg-settings.py -D app="$app" -D background=build/dmg-background.tiff "Back in 5" "$dmg" > /dev/null
 if [ "$LOCAL" = 1 ]; then
   echo "made $dmg (ad hoc, not notarized)"
   exit 0
@@ -55,7 +55,9 @@ codesign --sign "$identity" --timestamp "$dmg"
 notarize "$dmg"
 xcrun stapler staple "$dmg"
 
-# The asset keeps the name BRB.dmg, so releases/latest/download/BRB.dmg always points at the newest.
-gh release create "v$VERSION" "$dmg" --title "BRB $VERSION" \
-  --notes "Download BRB.dmg, open it and drag BRB into Applications. Apple silicon, macOS 14 or later."
-echo "published BRB $VERSION: https://github.com/samsara0xgg/BRB/releases/latest/download/BRB.dmg"
+# The asset keeps its name, so releases/latest/download/Back-in-5.dmg always points at the newest. A copy
+# named BRB.dmg, the name until 1.1, keeps the links from before working.
+cp "$dmg" dist/BRB.dmg
+gh release create "v$VERSION" "$dmg" dist/BRB.dmg --title "Back in 5 $VERSION" \
+  --notes "Download Back-in-5.dmg, open it and drag Back in 5 into Applications. Apple silicon, macOS 14 or later."
+echo "published Back in 5 $VERSION: https://github.com/samsara0xgg/BRB/releases/latest/download/Back-in-5.dmg"

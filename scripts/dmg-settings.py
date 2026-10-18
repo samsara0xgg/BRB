@@ -1,4 +1,4 @@
-# dmgbuild settings for BRB.dmg (scripts/release.sh passes app and background with -D).
+# dmgbuild settings for Back-in-5.dmg (scripts/release.sh passes app and background with -D).
 # The icon centres match DiskImage.app and DiskImage.applications in DiskImage.swift.
 import os.path
 

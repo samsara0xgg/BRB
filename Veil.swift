@@ -184,7 +184,7 @@ final class Veil {
   private func keepDisplayOn(_ on: Bool) {
     if on && awake == 0 {
       let result = IOPMAssertionCreateWithName("PreventUserIdleDisplaySleep" as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn),
-                                               "BRB is guarding this Mac" as CFString, &awake)
+                                               "Back in 5 is guarding this Mac" as CFString, &awake)
       if result != kIOReturnSuccess {
         log("display-sleep assertion failed: \(result)")
         awake = 0

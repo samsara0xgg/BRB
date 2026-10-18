@@ -127,9 +127,11 @@ struct BRBMediumView: View {
             WClockView(
               kind: clock, now: entry.date, size: 28, color: Theme.text(for: s.look), width: 124, alignment: .leading)
           } else {
-            Text("BRB")
+            Text("Back in 5")
               .font(.rounded(28, .semibold))
               .foregroundStyle(Theme.ink)
+              .lineLimit(1)
+              .minimumScaleFactor(0.7)
           }
           Text(entry.isStale && s.fetched > 0 ? t("wi_updated", Fmt.hm(s.fetched)) : s.state.place.name)
             .font(.system(size: 12))
@@ -198,7 +200,7 @@ struct BRBEmptyView: View {
         WShield(look: .idle, size: compact ? 40 : 34)
         if !compact {
           VStack(alignment: .leading, spacing: 1) {
-            Text("BRB").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink)
+            Text("Back in 5").font(.system(size: 16, weight: .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
             Text(t("noMacs")).font(.system(size: 12)).foregroundStyle(Theme.ink2).lineLimit(1)
           }
         }
@@ -206,7 +208,7 @@ struct BRBEmptyView: View {
       }
       if compact {
         Spacer(minLength: 4)
-        Text("BRB").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.ink)
+        Text("Back in 5").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.ink).lineLimit(1)
         Text(t("noMacs")).font(.system(size: 12)).foregroundStyle(Theme.ink2).lineLimit(1)
       }
       Spacer(minLength: 6)
@@ -289,7 +291,7 @@ struct BRBRectangularView: View {
       HStack(spacing: 8) {
         WShield(look: .idle, size: 28, mono: true).widgetAccentable()
         VStack(alignment: .leading, spacing: 1) {
-          Text("BRB").font(.headline).widgetAccentable()
+          Text("Back in 5").font(.headline).widgetAccentable()
           Text(t("noMacs")).font(.caption).lineLimit(1)
         }
         Spacer(minLength: 0)
@@ -312,11 +314,11 @@ struct BRBInlineView: View {
 
   var body: some View {
     if entry.locked {
-      Label("BRB · " + t("wv_needCloud"), systemImage: "lock.fill")
+      Label("Back in 5 · " + t("wv_needCloud"), systemImage: "lock.fill")
     } else if let s = entry.focus {
       Label(s.plain(now: entry.date.ms) + " · " + s.name, systemImage: symbol(s.look))
     } else {
-      Label("BRB · " + t("emptyDevT"), systemImage: "shield")
+      Label("Back in 5 · " + t("emptyDevT"), systemImage: "shield")
     }
   }
 }

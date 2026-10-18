@@ -875,7 +875,7 @@ const PAGE = `<!doctype html>
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0b0f1c">
-<title>BRB</title>
+<title>Back in 5</title>
 <style>
   :root {
     --bg: #0b0f1c; --ink: #eef1f8; --dim: rgba(238, 241, 248, .62); --faint: rgba(238, 241, 248, .38);
@@ -927,7 +927,7 @@ const PAGE = `<!doctype html>
 <main>
   <header>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8 19.4 5.6v5.8c0 4.8-3.1 8.6-7.4 10.1-4.3-1.5-7.4-5.3-7.4-10.1V5.6Z" fill="#f6b544"/><circle cx="12" cy="11.4" r="2.4" fill="#2b1a00"/></svg>
-    <h1>BRB</h1>
+    <h1>Back in 5</h1>
     <span class="pill" id="pill"></span>
   </header>
   <div class="live" id="live" hidden><img id="frame" alt=""><span class="tag" id="age"></span><div class="empty" id="waiting"></div></div>
@@ -982,7 +982,7 @@ const PAGE = `<!doctype html>
   $("footer").textContent = T.footer;
   $("photosLabel").textContent = T.photos;
   $("timelineLabel").textContent = T.timeline;
-  document.title = "BRB";
+  document.title = "Back in 5";
 
   function chip(text, cls) {
     const el = document.createElement("span");
@@ -1142,7 +1142,7 @@ const PAIR_PAGE = `<!doctype html>
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0b0f1c">
-<title>BRB</title>
+<title>Back in 5</title>
 <style>
   :root { --bg: #0b0f1c; --ink: #eef1f8; --dim: rgba(238, 241, 248, .62); --amber: #f6b544; color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -1167,10 +1167,10 @@ const PAIR_PAGE = `<!doctype html>
 <script>
   const zh = (navigator.languages || [navigator.language]).some((l) => /^zh/i.test(l || ""));
   document.documentElement.lang = zh ? "zh-Hans" : "en";
-  document.getElementById("title").textContent = zh ? "在 iPhone 上打开 BRB" : "Open BRB on your iPhone";
-  document.getElementById("sub").textContent = zh ? "如果没有自动打开，先安装 BRB，再回到这里点下面的按钮。" : "If it doesn't open by itself, install BRB, then come back and tap the button.";
+  document.getElementById("title").textContent = zh ? "在 iPhone 上打开 Back in 5" : "Open Back in 5 on your iPhone";
+  document.getElementById("sub").textContent = zh ? "如果没有自动打开，先安装 Back in 5，再回到这里点下面的按钮。" : "If it doesn't open by itself, install Back in 5, then come back and tap the button.";
   const open = document.getElementById("open");
-  open.textContent = zh ? "打开 BRB" : "Open BRB";
+  open.textContent = zh ? "打开 Back in 5" : "Open Back in 5";
   open.href = "brb://pair?c=" + encodeURIComponent(location.pathname.split("/")[2] || "") + "&h=" + encodeURIComponent(location.host);
   setTimeout(() => { location.href = open.href; }, 150);
 </script>

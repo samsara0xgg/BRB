@@ -29,12 +29,12 @@
 "wi_control_desc" = "Start or stop guarding your Mac.";
 
 /* What an action answers */
-"wi_needsPro" = "Starting, stopping and silencing need BRB Pro.";
-"wi_noMac" = "No Mac is paired yet. Open BRB to pair one.";
+"wi_needsPro" = "Starting, stopping and silencing need Back in 5 Pro.";
+"wi_noMac" = "No Mac is paired yet. Open Back in 5 to pair one.";
 "wi_already" = "%1$@ is already guarding.";
 "wi_failed" = "Couldn’t reach %1$@.";
 "wi_started" = "%1$@ will start guarding in a few seconds.";
-"wi_notStarted" = "%1$@ didn’t start guarding. Check its permissions in BRB on the Mac.";
+"wi_notStarted" = "%1$@ didn’t start guarding. Check its permissions in Back in 5 on the Mac.";
 "wi_stopped" = "%1$@ stopped guarding.";
 "wi_notGuarding" = "%1$@ isn’t guarding.";
 "wi_hushed" = "Siren stopped on %1$@.";

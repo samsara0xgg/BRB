@@ -228,12 +228,12 @@ private struct GeneralPane: View {
         SwitchRow(title: L("Frosted screen"), sub: L("Shows the notice on every screen while guarding"), on: $model.veil)
       }
       SettingsGroup {
-        SettingsRow(title: L("How it works"), sub: L("Three cards on what BRB does")) {
+        SettingsRow(title: L("How it works"), sub: L("Three cards on what Back in 5 does")) {
           Button(L("Show again"), action: model.onIntro)
             .controlSize(.small)
         }
       }
-      Text(verbatim: "BRB \(version) · Be Right Back")
+      Text(verbatim: "Back in 5 \(version)")
         .font(Theme.label)
         .foregroundStyle(.tertiary)
         .frame(maxWidth: .infinity)
@@ -389,7 +389,7 @@ private struct IPhoneGroup: View {
           }
           .controlSize(.small)
         } else {
-          SettingsRow(title: L("BRB on your iPhone"), sub: L("Stop the siren, disarm or start guarding from your phone, and see the history.")) {
+          SettingsRow(title: L("Back in 5 on your iPhone"), sub: L("Stop the siren, disarm or start guarding from your phone, and see the history.")) {
             Button(L("Pair iPhone…"), action: pairing.begin)
               .controlSize(.small)
           }
@@ -411,7 +411,7 @@ private struct IPhoneGroup: View {
           .id(offer.qr)
           .transition(.opacity)
         VStack(alignment: .leading, spacing: 10) {
-          Step(n: 1, text: L("Open the BRB app on your iPhone"))
+          Step(n: 1, text: L("Open the Back in 5 app on your iPhone"))
           Step(n: 2, text: L("Scan this code, or type the six digits"))
           Text(verbatim: offer.spaced)
             .font(.system(size: 26, weight: .semibold, design: .monospaced))

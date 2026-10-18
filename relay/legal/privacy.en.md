@@ -1,6 +1,6 @@
 ## 1. Who we are
 
-BRB (Be Right Back) is built and run by allen, an individual developer ("we"). There is no company. BRB has three parts:
+Back in 5 is built and run by allen, an individual developer ("we"). There is no company. Back in 5 has three parts:
 
 - **The Mac app**: a macOS menu-bar anti-theft app, distributed as a notarized DMG outside the Mac App Store.
 - **The iPhone app**: on the App Store.
@@ -23,7 +23,7 @@ Contact: {{email}}
 | Data | Purpose | Where | How long |
 |---|---|---|---|
 | Camera buffer: the last 10 s, about 8 frames a second | To save the 10 s before a touch | Memory only | Constantly overwritten; discarded when guarding ends |
-| Alarm recording: the 10 s before the touch and everything until disarm; video only, no sound | Evidence for you | `~/Movies/BRB/` | 7 days and 20 GB in total, oldest first (cleaned when the app starts and when guarding starts); delete any time |
+| Alarm recording: the 10 s before the touch and everything until disarm; video only, no sound | Evidence for you | `~/Movies/Back in 5/` | 7 days and 20 GB in total, oldest first (cleaned when the app starts and when guarding starts); delete any time |
 | Session records: start and end, trigger, how it was disarmed, ignored bumps, siren time, photo count, recording file name, test or not | The panel's Recent list and the welcome-back summary | `~/Library/Application Support/BRB/` | The last 30 |
 | Log: events, errors, the input type or key code that set off an alarm, the paired phone's name | Troubleshooting | `~/Library/Logs/brb.log` | Cut to the last 1 MB once it passes 10 MB; delete any time |
 | Settings and secrets: screen note, place, volume, relay key and access token, paired phone's name | Making the app work | App preferences (`com.allen.brb.mac`) | Until you reset the link or delete the app |
@@ -74,13 +74,13 @@ This local data may be included in your iCloud or computer backups, depending on
 
 ## 4. The camera and people nearby (sensitive data)
 
-Alarm photos and recordings can show faces, which many laws treat as sensitive. This is how BRB handles them:
+Alarm photos and recordings can show faces, which many laws treat as sensitive. This is how Back in 5 handles them:
 
 - Nothing is saved or photographed until the Mac is touched. Until then there are only 10 constantly overwritten seconds in memory, so people walking past are not kept.
-- Before a photo, live frame or recording frame leaves the camera pipeline, the Mac pixelates every face except the largest. This uses Apple Vision face detection, which finds where faces are. BRB does not recognise faces and does not extract or store face features.
+- Before a photo, live frame or recording frame leaves the camera pipeline, the Mac pixelates every face except the largest. This uses Apple Vision face detection, which finds where faces are. Back in 5 does not recognise faces and does not extract or store face features.
 - Pixelation can miss a face (in profile, covered, in poor light). The person closest to the Mac stays clear, because that is the evidence.
 - While guarding, the screen says in English and Chinese: please don't touch; walking by isn't recorded, touching it is.
-- You decide where and when to use BRB. For other people in the pictures, we only store and deliver the photos for you. You must follow your local laws on recording and personal data; see the Terms of Use.
+- You decide where and when to use Back in 5. For other people in the pictures, we only store and deliver the photos for you. You must follow your local laws on recording and personal data; see the Terms of Use.
 
 ## 5. Who can see what
 
@@ -107,7 +107,7 @@ The relay (Cloudflare) and Apple's push service are outside mainland China. When
 - Kinds of data: sections 3.2, 3.3 and 6.
 - How to use your rights: section 8, or contact us.
 
-**Separate consent (for users in mainland China, under the PIPL)**: before using BRB's guarding, please separately confirm that you agree to this data, including face images in alarm photos, being transferred outside mainland China. If you don't agree, don't use guarding, or run your own relay (section 11). You can withdraw at any time by resetting the link and stopping use; this does not affect processing that happened before.
+**Separate consent (for users in mainland China, under the PIPL)**: before using Back in 5's guarding, please separately confirm that you agree to this data, including face images in alarm photos, being transferred outside mainland China. If you don't agree, don't use guarding, or run your own relay (section 11). You can withdraw at any time by resetting the link and stopping use; this does not affect processing that happened before.
 
 ## 8. Your rights, and how to delete
 
@@ -119,7 +119,7 @@ You can do most of this yourself:
 - **Delete all photos in the cloud**: iPhone app, Settings → Privacy & data → "Delete all my photos in the cloud". The history list stays.
 - **Delete everything the relay holds for this Mac**: "Reset link…" in the Mac's panel, or Mac Settings → Phone → "Unpair all phones…", or "Reset link" on this Mac's page in the iPhone app (the Mac must come online within 10 minutes). The old link stops working, every phone is unpaired, and the relay deletes photos, history, state and device registrations. It keeps only a "reset" marker so the old link can say it was reset.
 - **Unpair one iPhone**: removes this phone's registration on the relay and the pairing on the phone. The Mac's photos and history stay.
-- **Data on the Mac**: delete the recordings in `~/Movies/BRB/`, `~/Library/Logs/brb.log` and `~/Library/Application Support/BRB/`.
+- **Data on the Mac**: delete the recordings in `~/Movies/Back in 5/`, `~/Library/Logs/brb.log` and `~/Library/Application Support/BRB/`.
 - **Data on the iPhone**: delete the app.
 
 Or email {{email}}. There are no accounts, so include the room ID (the part of the phone-page link after `/v/`) so we can find the data. We reply within 15 working days. Resetting the link yourself is still the fastest way.
@@ -136,7 +136,7 @@ Or email {{email}}. There are no accounts, so include the room ID (the part of t
 
 ## 10. Children
 
-BRB is not directed at children under 14 (under 13 elsewhere, or a higher age where local law requires). We do not knowingly collect children's data. If you think a child has used BRB, reset the link or contact us.
+Back in 5 is not directed at children under 14 (under 13 elsewhere, or a higher age where local law requires). We do not knowingly collect children's data. If you think a child has used Back in 5, reset the link or contact us.
 
 ## 11. Running your own relay
 

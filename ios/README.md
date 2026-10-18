@@ -1,6 +1,6 @@
-# BRB for iPhone and Apple Watch
+# Back in 5 for iPhone and Apple Watch
 
-The phone side of BRB. It pairs with the Mac app through the relay, shows what the Mac sees, and stops or
+The phone side of Back in 5. It pairs with the Mac app through the relay, shows what the Mac sees, and stops or
 disarms an alarm from anywhere. SwiftUI, iOS 17 and watchOS 10, no third-party packages.
 
 ```sh
@@ -46,9 +46,9 @@ Other launch arguments, all harmless in a normal launch:
 ## Before the App Store
 
 - **Critical alerts** need an entitlement Apple grants on request. Add `com.apple.developer.usernotifications.critical-alerts`
-  to the app's entitlements and the `CRITICAL_ALERTS` compilation condition; until then BRB uses Time Sensitive alerts
+  to the app's entitlements and the `CRITICAL_ALERTS` compilation condition; until then Back in 5 uses Time Sensitive alerts
   and hides the switch.
 - **Push**: `aps-environment` is `development`; the relay needs the APNs key (see `relay/PROTOCOL.md`).
-- **In-app purchase**: create the non-consumable `com.allen.brb.pro` in App Store Connect (BRB Pro, one time).
+- **In-app purchase**: create the non-consumable `com.allen.brb.pro` in App Store Connect (Back in 5 Pro, one time).
 - **Links**: the support address, privacy policy, terms and the App Store id are placeholders in `App/Model/AppLinks.swift`.
 - **App Review**: reviewers have no Mac; the demo (above) is how they see every screen.

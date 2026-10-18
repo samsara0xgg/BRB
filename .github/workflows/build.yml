@@ -24,7 +24,8 @@ jobs:
           plutil -lint Info.plist Resources/*.lproj/*.strings
           python3 scripts/check-strings.py
       - name: Selftest without hardware
-        run: build/BRB.app/Contents/MacOS/brb selftest --no-hardware
+        run: |
+          "build/Back in 5.app/Contents/MacOS/brb" selftest --no-hardware
       - name: Check the relay's syntax
         run: cp relay/worker.js "$RUNNER_TEMP/worker.mjs" && node --check "$RUNNER_TEMP/worker.mjs"
       # What someone who downloads the repo goes through: a ZIP like GitHub's "Download ZIP"
@@ -42,26 +43,26 @@ jobs:
           sleep 6
           launchctl print "gui/$(id -u)/com.allen.guard-mode" | grep -E "^\s*(state|pid|program) ="
           plutil -lint ~/Library/LaunchAgents/com.allen.guard-mode.plist
-          grep -q "$dir/build/BRB.app" ~/Library/LaunchAgents/com.allen.guard-mode.plist
+          grep -q "$dir/build/Back in 5.app" ~/Library/LaunchAgents/com.allen.guard-mode.plist
           launchctl print "gui/$(id -u)/com.allen.guard-mode" | grep -q "state = running"
           if pgrep -f brb-relaunch; then echo "launchd restarts this copy; no watcher wanted" >&2; exit 1; fi
           tail -5 ~/Library/Logs/brb.log
           ./uninstall.sh < /dev/null
           test ! -e ~/Library/LaunchAgents/com.allen.guard-mode.plist
           sleep 3  # bootout is async
-          ! pgrep -f "$dir/build/BRB.app"
-      # What someone who downloads BRB.dmg goes through, with an ad hoc signature in place of the
+          ! pgrep -f "$dir/build/Back in 5.app"
+      # What someone who downloads Back-in-5.dmg goes through, with an ad hoc signature in place of the
       # notarized one scripts/release.sh makes on the author's Mac.
       - name: Install from the disk image
         run: |
           LOCAL=1 scripts/release.sh
           mnt="$RUNNER_TEMP/brb-dmg"
-          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" dist/BRB.dmg > /dev/null
+          hdiutil attach -nobrowse -readonly -mountpoint "$mnt" dist/Back-in-5.dmg > /dev/null
           test -L "$mnt/Applications"
-          ditto "$mnt/BRB.app" /Applications/BRB.app
+          ditto "$mnt/Back in 5.app" "/Applications/Back in 5.app"
           hdiutil detach -quiet "$mnt"
-          codesign -d --entitlements - /Applications/BRB.app 2>&1 | grep -q com.apple.security.device.camera
-          sudo /Applications/BRB.app/Contents/MacOS/brb lid-rule "$(id -un)" --no-prompt
+          codesign -d --entitlements - "/Applications/Back in 5.app" 2>&1 | grep -q com.apple.security.device.camera
+          sudo "/Applications/Back in 5.app/Contents/MacOS/brb" lid-rule "$(id -un)" --no-prompt
           sudo grep -q "^$(id -un) ALL=(root) NOPASSWD: /usr/bin/pmset -a disablesleep 1" /etc/sudoers.d/brb
           sudo visudo -cf /etc/sudoers.d/brb
           sudo rm /etc/sudoers.d/brb
@@ -69,7 +70,12 @@ jobs:
           # A setting saved under the app's old id (until 1.1) is carried over on the first launch.
           defaults write com.allen.guard-mode brbProbe -string carried
           defaults delete com.allen.brb.mac adoptedOldSettings 2>/dev/null || true
-          open /Applications/BRB.app
+          # So are the recordings in the old folder, and 1.0's BRB.app (the old id) goes to the Trash.
+          rm -rf ~/Movies/BRB "$HOME/Movies/Back in 5" && mkdir -p ~/Movies/BRB && touch ~/Movies/BRB/probe.mov
+          mkdir -p /Applications/BRB.app/Contents
+          printf '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.allen.guard-mode</string></dict></plist>\n' \
+            > /Applications/BRB.app/Contents/Info.plist
+          open "/Applications/Back in 5.app"
           sleep 6
           pgrep -x brb
           cat ~/Library/Logs/brb.log
@@ -77,6 +83,9 @@ jobs:
           grep -q "relaunch watcher started" ~/Library/Logs/brb.log
           grep -q "settings brought over from com.allen.guard-mode" ~/Library/Logs/brb.log
           test "$(defaults read com.allen.brb.mac brbProbe)" = carried
+          test -e "$HOME/Movies/Back in 5/probe.mov"
+          grep -q "moved the old BRB.app to the Trash" ~/Library/Logs/brb.log
+          test ! -e /Applications/BRB.app
           # A crash or kill -9 brings this copy back, as launchd does for install.sh's; SIGTERM ends it.
           first=$(pgrep -x brb)
           kill -9 "$first"

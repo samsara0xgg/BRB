@@ -1,5 +1,5 @@
 /* Generated from the prototype copy; edit freely from here on. */
-"app_name" = "BRB";
+"app_name" = "Back in 5";
 "free" = "免费";
 "tabDevices" = "设备";
 "tabRecords" = "记录";
@@ -57,10 +57,10 @@
 "ybar" = "关掉了通知，报警时你会不知道";
 "ybarBtn" = "去打开";
 "obarPhone" = "手机没联网，显示的是最后已知的状态";
-"errT" = "连不上 BRB 服务";
+"errT" = "连不上 Back in 5 服务";
 "errS" = "状态可能不是最新的，正在重试。";
 "emptyDevT" = "配对一台 Mac";
-"emptyDevP" = "在 Mac 上装好 BRB，扫一下它的二维码。电脑被碰时，这台手机第一时间知道。";
+"emptyDevP" = "在 Mac 上装好 Back in 5，扫一下它的二维码。电脑被碰时，这台手机第一时间知道。";
 "emptyDevLnk" = "还没有 Mac 版？";
 "shStartT" = "开始守护";
 "shPlace" = "地点";
@@ -85,15 +85,15 @@
 "h_ax" = "辅助功能";
 "h_ax_ok" = "能发现有人碰键盘和触控板";
 "h_ax_bad" = "关着：碰键盘和触控板不会报警";
-"h_ax_fix" = "在 Mac 上：系统设置 → 隐私与安全性 → 辅助功能，打开 BRB。";
+"h_ax_fix" = "在 Mac 上：系统设置 → 隐私与安全性 → 辅助功能，打开 Back in 5。";
 "h_cam" = "摄像头";
 "h_cam_ok" = "只在报警前后录像";
 "h_cam_bad" = "不能用：报警时不会录像";
-"h_cam_fix" = "在 Mac 上：系统设置 → 隐私与安全性 → 摄像头，打开 BRB；关掉正在用摄像头的 App。";
+"h_cam_fix" = "在 Mac 上：系统设置 → 隐私与安全性 → 摄像头，打开 Back in 5；关掉正在用摄像头的 App。";
 "h_lid" = "合盖不睡眠";
 "h_lid_ok" = "合上屏幕也会继续守护";
 "h_lid_bad" = "没设好：合盖后守护会中断";
-"h_lid_fix" = "在 Mac 的 BRB 面板点「修复」，输一次管理员密码。";
+"h_lid_fix" = "在 Mac 的 Back in 5 面板点「修复」，输一次管理员密码。";
 "h_mot" = "运动传感器";
 "h_mot_ok" = "能感觉到被拿起和推动";
 "h_mot_bad" = "运动传感器停了。合盖、拔电源和触碰仍会报警。";
@@ -164,7 +164,7 @@
 "sum_photos" = "照片";
 "sum_video" = "视频";
 "sum_videoC" = "已存到云端";
-"sum_videoF" = "在 Mac 的 影片/BRB 里";
+"sum_videoF" = "在 Mac 的 影片/Back in 5 里";
 "none" = "没有";
 "doneBtn" = "完成";
 "msgT" = "在 Mac 上显示一句话";
@@ -201,7 +201,7 @@
 "p_siren" = "10 秒没人解除，已开始鸣笛";
 "p_back" = "电脑已放回原位，已停响";
 "p_sensor" = "运动传感器停了，现在只部分守护";
-"p_test" = "BRB 测试";
+"p_test" = "Back in 5 测试";
 "p_test_b" = "收到这条，报警时就会推送到这台手机。";
 "p_remind" = "还没开守护";
 "la_arm" = "准备守护";
@@ -235,7 +235,7 @@
 "end_mac" = "在 Mac 上停止";
 "rd_video" = "视频片段";
 "rd_pre" = "报警前 10 秒";
-"rd_vfree" = "视频保存在 Mac 的 影片/BRB 里";
+"rd_vfree" = "视频保存在 Mac 的 影片/Back in 5 里";
 "rd_vfreeBtn" = "升级 Pro，在手机上直接看";
 "rd_tl" = "时间线";
 "rd_save" = "保存照片";
@@ -256,7 +256,7 @@
 "savedImg" = "已存到相册";
 "evT" = "证据包";
 "evP" = "时间线和照片，给保安或警察看";
-"evDocT" = "BRB 报警记录";
+"evDocT" = "Back in 5 报警记录";
 "ev_tl" = "时间线";
 "ev_ph" = "照片";
 "ev_vid" = "视频";
@@ -269,7 +269,7 @@
 "ev_vidF" = "在 Mac 上";
 "planFree" = "免费版";
 "planFreeS" = "全部防护功能 · 照片保存 7 天";
-"planCloud" = "BRB Pro";
+"planCloud" = "Back in 5 Pro";
 "planProS" = "已买断 · Mac 和 iPhone 通用";
 "upgrade" = "升级到 Pro";
 "restore" = "恢复购买";
@@ -314,7 +314,7 @@
 "setOffline" = "离线时改的设置，会在联网后同步";
 "setErrT" = "读不到购买状态";
 "setErrS" = "已经有的功能照常可用。";
-"contactT" = "会打开邮件，发给 BRB 团队";
+"contactT" = "会打开邮件，发给 Back in 5 团队";
 "thanks" = "谢谢！";
 "noMacs" = "还没有配对的电脑";
 "pv_whenT" = "什么时候录";
@@ -333,7 +333,7 @@
 "faqA2" = "在报警页点「解除警报」，用 Face ID 确认；或者回到 Mac 前按指纹。";
 "faqQ3" = "「停止鸣笛」和「解除警报」有什么不同？";
 "faqA3" = "停止鸣笛只让它安静，Mac 仍锁屏、继续录像，再被拿起会重新响。解除警报会结束这次守护。";
-"pwT" = "BRB Pro";
+"pwT" = "Back in 5 Pro";
 "pwP" = "防护功能全部免费，Pro 再加几样方便的";
 "cmpF" = "功能";
 "cmpFree" = "免费";
@@ -352,7 +352,7 @@
 "c7c" = "30 天";
 "c8" = "对讲、在 Mac 上显示消息";
 "c9" = "Apple Watch";
-"subscribed" = "BRB Pro 已解锁";
+"subscribed" = "Back in 5 Pro 已解锁";
 "youHave" = "你已经有 Pro";
 "ppName" = "一次买断";
 "proPrice" = "¥38";
@@ -372,12 +372,12 @@
 "nT" = "电脑被碰时，我们要第一时间叫醒你";
 "nP" = "报警会带着照片推送到这台手机。别的提醒，你自己选。";
 "nBtn" = "允许通知";
-"sysNT" = "“BRB”想给你发送通知";
+"sysNT" = "“Back in 5”想给你发送通知";
 "sysNP" = "通知可能包括提醒、声音和图标标记。这些可在“设置”中配置。";
 "cT" = "手机静音时，报警也要响";
 "cP" = "只有报警会绕过静音和专注模式，其他提醒照常安静。";
 "cBtn" = "打开「静音也响」";
-"sysCT" = "“BRB”想发送重要提醒";
+"sysCT" = "“Back in 5”想发送重要提醒";
 "sysCP" = "重要提醒会在手机静音或开启专注模式时播放声音。";
 "scanT" = "扫描 Mac 上的二维码";
 "macQR" = "用 iPhone 扫码配对";
@@ -393,7 +393,7 @@
 "expBtn" = "重新扫描";
 "expired" = "已过期";
 "moT" = "Mac 不在线";
-"moP" = "打开 Mac 上的 BRB，连上网，再试一次。";
+"moP" = "打开 Mac 上的 Back in 5，连上网，再试一次。";
 "moBtn" = "再试一次";
 "codeT" = "输入配对码";
 "codeP" = "在 Mac 上点盾牌 → 手机 → 配对，二维码下面有 6 位数字。";
@@ -404,8 +404,8 @@
 "testGot" = "收到了";
 "dnT" = "准备好了";
 "dnP" = "下次离开时，在 Mac 或这里点「开始守护」。";
-"dnBtn" = "进入 BRB";
-"nmT" = "先在 Mac 上装 BRB";
+"dnBtn" = "进入 Back in 5";
+"nmT" = "先在 Mac 上装 Back in 5";
 "nmP" = "把下载链接发到你的电脑，在那边打开就能装。";
 "nm_handoff" = "接力";
 "nm_handoffS" = "在 Mac 的程序坞里点开";
@@ -427,7 +427,7 @@
 "wv_dismiss" = "好";
 "wv_ignore" = "忽略";
 "wv_openPhone" = "在 iPhone 上打开";
-"wv_cloudT" = "Apple Watch 需要 BRB Pro";
+"wv_cloudT" = "Apple Watch 需要 Back in 5 Pro";
 "wv_cloudS" = "报警时手腕震动，看照片、停鸣笛，抬手就能开关守护";
 "wv_cloudBtn" = "在 iPhone 上看看";
 "wv_lock" = "Pro";
@@ -476,14 +476,14 @@
 "rl_alarmS" = "报警 · %1$@";
 "times" = "%1$d 次";
 "rd_photos" = "照片 · %1$d 张";
-"shareH" = "今天 BRB 帮我看了 %1$@电脑，忽略 %2$@";
+"shareH" = "今天 Back in 5 帮我看了 %1$@电脑，忽略 %2$@";
 "mins" = "%1$d 分钟";
 "buyFine" = "首发价，Apple Watch 版上线后恢复 %1$@";
 "buyBtn" = "买断 %1$@";
-"confirmBuyP" = "BRB Pro，一次付清 %1$@，Mac 和 iPhone 通用";
+"confirmBuyP" = "Back in 5 Pro，一次付清 %1$@，Mac 和 iPhone 通用";
 "gFor" = "已守护 %1$@";
 "sr_counted" = "已忽略 %1$@";
-"err_photos" = "没有相册权限。请在设置里允许 BRB 添加照片。";
+"err_photos" = "没有相册权限。请在设置里允许 Back in 5 添加照片。";
 "err_notready" = "Mac 还没准备好，稍后再试";
 "err_busy" = "Mac 正忙，稍后再试";
 "err_locked" = "Mac 已锁定，请先在 Mac 上解锁";

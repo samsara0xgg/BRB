@@ -427,7 +427,7 @@ struct LinkOptions: View {
   private func mail() {
     var c = URLComponents(string: "mailto:")!
     c.queryItems = [
-      URLQueryItem(name: "subject", value: "BRB for Mac"), URLQueryItem(name: "body", value: AppLinks.macDownload.absoluteString),
+      URLQueryItem(name: "subject", value: "Back in 5 for Mac"), URLQueryItem(name: "body", value: AppLinks.macDownload.absoluteString),
     ]
     if let url = c.url { UIApplication.shared.open(url) }
     sent = "mail"

@@ -271,7 +271,7 @@ describe("devices and tokens", () => {
     await register(r, b);
     const res = await relay.http("POST", `/test-push/${r.id}?t=${r.token}`);
     assert.deepEqual(res.json, { ok: true, sent: 1, failed: 0 });
-    const p = await find(a.apns, (body) => body.aps.alert.title === "BRB");
+    const p = await find(a.apns, (body) => body.aps.alert.title === "Back in 5");
     assert.match(p.body.aps.alert.body, /测试/);
     assert.equal(p.headers["apns-push-type"], "alert");
     assert.equal(sent(b.la).length, 0);

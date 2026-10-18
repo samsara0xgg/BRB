@@ -1,6 +1,6 @@
 /* Copy only the Apple Watch app and its complication use. The rest comes from Localizable.strings. */
 "ww_emptyT" = "还没有 Mac";
-"ww_emptyS" = "在 iPhone 上打开 BRB，配对一台 Mac";
+"ww_emptyS" = "在 iPhone 上打开 Back in 5，配对一台 Mac";
 "ww_pairShort" = "在 iPhone 上配对";
 "ww_since" = "自 %1$@ 起";
 "ww_photoA11y" = "来自 Mac 的照片";
@@ -10,5 +10,5 @@
 "ww_failLocked" = "Mac 已锁定";
 "ww_failForbidden" = "请在 iPhone 上重新配对这台 Mac";
 "ww_failOther" = "没有成功，请再试一次";
-"ww_widgetName" = "BRB";
+"ww_widgetName" = "Back in 5";
 "ww_widgetDesc" = "你的 Mac 是否在守护中";

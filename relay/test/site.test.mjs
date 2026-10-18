@@ -40,14 +40,20 @@ describe("pages", () => {
     assert.match(r.text, /<table><tr><th>Data<\/th>/);
     assert.match(r.text, /<li>/);
     assert.match(r.text, /<a href="https:\/\/www\.cloudflare\.com\/privacypolicy\/">/);
-    assert.match(r.text, /<code>~\/Movies\/BRB\/<\/code>/);
+    assert.match(r.text, /<code>~\/Movies\/Back in 5\/<\/code>/);
     assert.match(r.text, /Effective 20\d\d-\d\d-\d\d/);
   });
 
   test("/mac goes to the download", async () => {
     const r = await fetch(`http://${relay.origin}/mac`, { redirect: "manual" });
     assert.equal(r.status, 302);
-    assert.equal(r.headers.get("location"), "https://github.com/samsara0xgg/BRB/releases/latest/download/BRB.dmg");
+    assert.equal(r.headers.get("location"), "https://github.com/samsara0xgg/BRB/releases/latest/download/Back-in-5.dmg");
+  });
+
+  test("/ opens the support page, in the language asked for", async () => {
+    const r = await fetch(`http://${relay.origin}/?lang=zh`, { redirect: "manual" });
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get("location"), "/support?lang=zh");
   });
 
   test("only GET, and nothing below a page", async () => {

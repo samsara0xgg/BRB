@@ -1,6 +1,6 @@
 /* Copy only the Apple Watch app and its complication use. The rest comes from Localizable.strings. */
 "ww_emptyT" = "No Mac yet";
-"ww_emptyS" = "Open BRB on your iPhone and pair a Mac";
+"ww_emptyS" = "Open Back in 5 on your iPhone and pair a Mac";
 "ww_pairShort" = "Pair on iPhone";
 "ww_since" = "Since %1$@";
 "ww_photoA11y" = "Photo from the Mac";
@@ -10,5 +10,5 @@
 "ww_failLocked" = "The Mac is locked";
 "ww_failForbidden" = "Pair this Mac again on iPhone";
 "ww_failOther" = "That didn’t work. Try again";
-"ww_widgetName" = "BRB";
+"ww_widgetName" = "Back in 5";
 "ww_widgetDesc" = "Whether your Mac is guarded";

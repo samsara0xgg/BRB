@@ -83,7 +83,7 @@ final class AppStore {
   var recordsBadge = false
   var recordFilterAlarms = false
   var recordMac: String?
-  /// An error the whole screen should show instead of cards ("Can't reach BRB").
+  /// An error the whole screen should show instead of cards ("Can't reach Back in 5").
   var loadFailed = false
   /// The app is in front (so an alarm can open its page by itself).
   var appActive = true

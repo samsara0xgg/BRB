@@ -1,4 +1,4 @@
-# BRB for iPhone and Apple Watch. Generate the Xcode project with XcodeGen:
+# Back in 5 (BRB until 1.1) for iPhone and Apple Watch. Generate the Xcode project with XcodeGen:
 #   brew install xcodegen && cd ios && xcodegen && open BRB.xcodeproj
 # (ios/open.sh does exactly that.) The project is generated, not committed.
 name: BRB
@@ -50,7 +50,7 @@ targets:
     info:
       path: .generated/BRB-Info.plist
       properties:
-        CFBundleDisplayName: BRB
+        CFBundleDisplayName: Back in 5
         CFBundleLocalizations: [en, zh-Hans]
         UILaunchScreen:
           UIColorName: LaunchBackground
@@ -72,7 +72,7 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        INFOPLIST_KEY_CFBundleDisplayName: BRB
+        INFOPLIST_KEY_CFBundleDisplayName: Back in 5
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
     scheme:
@@ -93,7 +93,7 @@ targets:
     info:
       path: .generated/BRBWidgets-Info.plist
       properties:
-        CFBundleDisplayName: BRB
+        CFBundleDisplayName: Back in 5
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
@@ -116,7 +116,7 @@ targets:
     info:
       path: .generated/BRBNotifications-Info.plist
       properties:
-        CFBundleDisplayName: BRB
+        CFBundleDisplayName: Back in 5
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
@@ -143,7 +143,7 @@ targets:
     info:
       path: .generated/BRBWatch-Info.plist
       properties:
-        CFBundleDisplayName: BRB
+        CFBundleDisplayName: Back in 5
         CFBundleLocalizations: [en, zh-Hans]
         WKApplication: true
         WKCompanionAppBundleIdentifier: com.allen.brb
@@ -171,7 +171,7 @@ targets:
     info:
       path: .generated/BRBWatchWidgets-Info.plist
       properties:
-        CFBundleDisplayName: BRB
+        CFBundleDisplayName: Back in 5
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

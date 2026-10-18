@@ -1,36 +1,36 @@
 ## 1. About these terms
 
-These terms cover BRB (Be Right Back): the Mac app, the iPhone app, and the relay service we run. BRB is provided by allen, an individual developer ("we"). By installing or using BRB you agree to these terms and to the Privacy Policy. If you don't agree, don't use BRB.
+These terms cover Back in 5: the Mac app, the iPhone app, and the relay service we run. Back in 5 is provided by allen, an individual developer ("we"). By installing or using Back in 5 you agree to these terms and to the Privacy Policy. If you don't agree, don't use Back in 5.
 
 ## 2. License
 
-- We give you a personal, non-exclusive, non-transferable, revocable license to use BRB on devices you own or control.
+- We give you a personal, non-exclusive, non-transferable, revocable license to use Back in 5 on devices you own or control.
 - The Mac app is distributed as a notarized DMG outside the Mac App Store. The iPhone app is distributed through the App Store and is also subject to Apple's Media Services Terms, including its Licensed Application End User License Agreement; where they conflict, Apple's terms prevail to the extent Apple requires.
-- Don't use BRB to secretly film or watch other people; don't interfere with, attack or abuse the relay (for example by guessing pairing codes or uploading content unrelated to BRB); don't resell or impersonate BRB.
-- If BRB's source code comes with a separate open-source license, that license governs the code itself; these terms govern use of the apps and the relay.
+- Don't use Back in 5 to secretly film or watch other people; don't interfere with, attack or abuse the relay (for example by guessing pairing codes or uploading content unrelated to Back in 5); don't resell or impersonate Back in 5.
+- If Back in 5's source code comes with a separate open-source license, that license governs the code itself; these terms govern use of the apps and the relay.
 
 ## 3. No guarantee against theft, or of recovery
 
-BRB is an alert tool. It is not insurance or a security service. It can:
+Back in 5 is an alert tool. It is not insurance or a security service. It can:
 
 - miss an event (for example when a sensor sends no data, the camera is covered, the Mac is shut or powered off quickly, or the chosen place is not sensitive enough);
 - raise a false alarm (for example when a friend or a waiter touches it);
 - deliver alerts late or not at all (network, Apple's push service or the relay failing);
 - miss a face when pixelating.
 
-BRB is provided "as is" and "as available". To the fullest extent the law allows, we give no warranties, express or implied, including merchantability, fitness for a particular purpose and non-infringement, and we do not promise that BRB will prevent theft, recover a device, or capture photos good enough to identify anyone. If your Mac is stolen, call the police.
+Back in 5 is provided "as is" and "as available". To the fullest extent the law allows, we give no warranties, express or implied, including merchantability, fitness for a particular purpose and non-infringement, and we do not promise that Back in 5 will prevent theft, recover a device, or capture photos good enough to identify anyone. If your Mac is stolen, call the police.
 
 ## 4. Your responsibilities
 
-- **Lawful recording**: the Mac's camera can capture people around you. You decide where and when to use BRB, and you must follow your local laws on recording, image rights and personal data, such as China's PIPL and the EU GDPR. In some places you must inform people or get their consent; the English and Chinese notice BRB shows while guarding may not be enough. Don't use BRB where filming is not allowed.
+- **Lawful recording**: the Mac's camera can capture people around you. You decide where and when to use Back in 5, and you must follow your local laws on recording, image rights and personal data, such as China's PIPL and the EU GDPR. In some places you must inform people or get their consent; the English and Chinese notice Back in 5 shows while guarding may not be enough. Don't use Back in 5 where filming is not allowed.
 - **Using photos and recordings**: you are responsible for whether saving, sharing or handing them over (including to the police) is lawful.
 - **Noise**: the siren is loud. In libraries, study rooms and other quiet places, try test mode first, set the volume, and take responsibility for disturbing others with a false alarm.
 - **Your link and devices**: keep the phone-page link, pairing codes and paired phones safe. If you think a link has leaked, reset it at once.
-- **Not for emergencies or safety**: don't rely on BRB to protect people or to replace professional security.
+- **Not for emergencies or safety**: don't rely on Back in 5 to protect people or to replace professional security.
 
 ## 5. Price
 
-- BRB is free, with no in-app purchases.
+- Back in 5 is free, with no in-app purchases.
 - If we add paid features later, the App Store shows their price before you buy, and these terms will say what they include. Apple will handle payment, restoring and refunds; we will never see your payment details.
 - Nothing in this section limits your statutory consumer rights.
 
@@ -51,7 +51,7 @@ BRB is provided "as is" and "as available". To the fullest extent the law allows
 To the fullest extent the law allows:
 
 - We are not liable for indirect, incidental, special, punitive or consequential loss, including loss or theft of devices or data, lost profits, or disputes arising from false alarms, missed alarms, recordings or the siren.
-- Our total liability for anything related to BRB is capped at the amount you actually paid us for BRB; if you paid nothing, it is zero.
+- Our total liability for anything related to Back in 5 is capped at the amount you actually paid us for Back in 5; if you paid nothing, it is zero.
 - Some laws don't allow certain liability to be excluded or limited (for example for intent, gross negligence or personal injury). There, these limits apply only as far as the law allows.
 
 ## 9. About Apple
@@ -64,7 +64,7 @@ These terms are governed by the laws of the place where allen, the developer, ha
 
 ## 11. Changes
 
-We may update these terms and change the effective date. We tell you about significant changes in the app or the release notes. Using BRB after a change means you accept the new terms.
+We may update these terms and change the effective date. We tell you about significant changes in the app or the release notes. Using Back in 5 after a change means you accept the new terms.
 
 ## 12. Contact
 

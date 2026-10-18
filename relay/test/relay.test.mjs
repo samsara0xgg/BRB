@@ -77,7 +77,7 @@ describe("v2 flows", () => {
     const r = room();
     const page = await relay.http("GET", `/v/${r.id}`);
     assert.equal(page.status, 200);
-    assert.match(page.text, /<title>BRB<\/title>/);
+    assert.match(page.text, /<title>Back in 5<\/title>/);
     assert.match(page.headers.get("content-type"), /text\/html/);
     const phone = await relay.phone(r.id, "x".repeat(10));
     const seen = await phone.waitFor((m) => m.level);
@@ -178,7 +178,6 @@ describe("v2 flows", () => {
   });
 
   test("unknown routes and tokens are not found", async () => {
-    assert.equal((await relay.http("GET", "/")).status, 404);
     assert.equal((await relay.http("GET", "/nothing/abcdefgh")).status, 404);
     assert.equal((await relay.http("GET", "/constructor/abcdefgh")).status, 404);
     assert.equal((await relay.http("GET", "/v/!!")).status, 404);

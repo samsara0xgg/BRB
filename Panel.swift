@@ -172,7 +172,7 @@ enum Preflight {
       Check(id: .camera, title: L("Camera"),
             detail: !f.hasCamera ? L("No built-in camera: an alarm won't be recorded")
               : f.camera == .authorized ? L("Films only around an alarm")
-              : f.camera == .notDetermined ? L("Allow it so an alarm can be recorded") : L("Turned off for BRB in System Settings"),
+              : f.camera == .notDetermined ? L("Allow it so an alarm can be recorded") : L("Turned off for Back in 5 in System Settings"),
             ok: f.hasCamera && f.camera == .authorized, optional: !f.hasCamera, askable: f.hasCamera && f.camera == .notDetermined),
       Check(id: .sleep, title: L("Stay awake with the lid shut"),
             detail: f.sleep ? L("Keeps guarding with the lid closed") : L("Needs an admin rule, installed once with your password"), ok: f.sleep),
@@ -212,7 +212,7 @@ enum Preflight {
     func quoted(_ s: String) -> String {
       "\"" + s.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
-    let prompt = admin ? " with prompt " + quoted(L("BRB keeps the Mac awake with the lid shut while it guards.")) + " with administrator privileges" : ""
+    let prompt = admin ? " with prompt " + quoted(L("Back in 5 keeps the Mac awake with the lid shut while it guards.")) + " with administrator privileges" : ""
     return "do shell script " + quoted(sh) + prompt
   }
 
@@ -714,7 +714,7 @@ private struct MainPage: View {
 /// The tile, the name, one status chip and the ⋯ menu (audit A3).
 private struct Header: View {
   @ObservedObject var model: PanelModel
-  var title = "BRB"
+  var title = "Back in 5"
   var showsStatus = true
 
   var body: some View {
@@ -893,7 +893,7 @@ private struct MoreButton: View {
     item("questionmark.circle", L("How it works")) { model.showIntro() }
     item("folder", L("Open Recordings Folder")) { model.reveal(nil) }
     menu.addItem(.separator())
-    item("power", L("Quit BRB"), "q") { NSApp.terminate(nil) }
+    item("power", L("Quit Back in 5"), "q") { NSApp.terminate(nil) }
     menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
   }
 }
@@ -1461,7 +1461,7 @@ private struct IntroPage: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      Header(model: model, title: L("Welcome to BRB"), showsStatus: false)
+      Header(model: model, title: L("Welcome to Back in 5"), showsStatus: false)
         .padding(.bottom, 12)
       ZStack(alignment: .topLeading) {
         card(step)
@@ -1484,7 +1484,7 @@ private struct IntroPage: View {
       }
       .padding(.top, 14)
       if step == 2 {
-        Text(L("BRB asks for Accessibility and the camera on the way."))
+        Text(L("Back in 5 asks for Accessibility and the camera on the way."))
           .font(Theme.label)
           .foregroundStyle(.tertiary)
           .padding(.top, 10)

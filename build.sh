@@ -1,11 +1,11 @@
 #!/bin/sh
-# Builds build/BRB.app (Apple Silicon, macOS 14 or later). Signs it with your Apple Development
+# Builds "build/Back in 5.app" (Apple Silicon, macOS 14 or later). Signs it with your Apple Development
 # certificate when there is one, which keeps the camera and Accessibility grants across rebuilds;
 # otherwise ad hoc (macOS then asks for those again after each rebuild). SIGN_IDENTITY overrides.
 set -e
 cd "$(dirname "$0")"
-app=build/BRB.app
-rm -rf "$app" build/GuardMode.app  # and the build from before the rename
+app="build/Back in 5.app"
+rm -rf "$app" build/BRB.app build/GuardMode.app  # and the builds from before the renames
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp Info.plist "$app/Contents/"
 cp -R Resources/en.lproj Resources/zh-Hans.lproj "$app/Contents/Resources/"

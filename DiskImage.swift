@@ -1,6 +1,6 @@
 import AppKit
 
-/// The background of BRB.dmg's window: where to drag the app, in both languages. Drawn here rather
+/// The background of Back-in-5.dmg's window: where to drag the app, in both languages. Drawn here rather
 /// than checked in as a picture, so the words and the layout live next to the icon positions
 /// (scripts/dmg-settings.py places the icons at `app` and `applications`).
 enum DiskImage {
@@ -41,8 +41,8 @@ enum DiskImage {
       let width = line.size().width
       line.draw(at: NSPoint(x: (size.width - width) / 2, y: flip(top) - line.size().height))
     }
-    text("Drag BRB into Applications", size: 19, weight: .semibold, color: rgb(0x1B2233), top: 46)
-    text("把 BRB 拖进「应用程序」文件夹", size: 13, weight: .regular, color: rgb(0x5B6375), top: 76)
+    text("Drag Back in 5 into Applications", size: 19, weight: .semibold, color: rgb(0x1B2233), top: 46)
+    text("把 Back in 5 拖进「应用程序」文件夹", size: 13, weight: .regular, color: rgb(0x5B6375), top: 76)
 
     // The arrow between the icons: amber, like the arm button.
     let start = app.x + 78, end = applications.x - 78, y = flip(app.y)

@@ -85,7 +85,7 @@ struct BRBGuardControl: ControlWidget {
 
   var body: some ControlWidgetConfiguration {
     StaticControlConfiguration(kind: BRBGuardControl.kind, provider: BRBControlProvider()) { value in
-      ControlWidgetToggle("BRB", isOn: value.isOn, action: SetGuardingIntent(macID: value.macID)) { isOn in
+      ControlWidgetToggle("Back in 5", isOn: value.isOn, action: SetGuardingIntent(macID: value.macID)) { isOn in
         Label(value.status, systemImage: isOn ? "shield.fill" : "shield")
       }
     }

@@ -77,10 +77,31 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     if !moved.isEmpty { log("settings brought over from \(oldID): \(moved.count)") }
   }
 
-  /// The app was called Guard Mode until October 2026: its state and recordings move over once.
+  /// 1.0 was BRB.app, under the old id. Back in 5 lands next to it in Applications instead of
+  /// replacing it, and its login item would start a second guard at the next login: so a copy
+  /// installed in Applications quits the old one and puts it in the Trash.
+  static func retireOldApp() {
+    let oldID = "com.allen.guard-mode", fm = FileManager.default
+    guard Bundle.main.bundlePath.hasPrefix("/Applications/") else { return }
+    for dir in ["/Applications", fm.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path] {
+      let old = URL(fileURLWithPath: dir).appendingPathComponent("BRB.app")
+      guard Bundle(url: old)?.bundleIdentifier == oldID else { continue }
+      for app in NSRunningApplication.runningApplications(withBundleIdentifier: oldID) where app.bundleURL?.standardizedFileURL == old.standardizedFileURL {
+        kill(app.processIdentifier, SIGTERM)  // 1.0 puts the Mac back and quits on SIGTERM
+      }
+      do {
+        try fm.trashItem(at: old, resultingItemURL: nil)
+        log("moved the old BRB.app to the Trash")
+      } catch {
+        log("the old BRB.app stays in \(dir): \(error.localizedDescription)")
+      }
+    }
+  }
+
+  /// The app was called Guard Mode, then BRB until 1.1: its state and recordings move over once.
   static func moveOldFolders() {
     let fm = FileManager.default, home = fm.homeDirectoryForCurrentUser
-    for (old, new) in [("Library/Application Support/GuardMode", supportDir), ("Movies/GuardMode", Recorder.folder)] {
+    for (old, new) in [("Library/Application Support/GuardMode", supportDir), ("Movies/BRB", Recorder.folder), ("Movies/GuardMode", Recorder.folder)] {
       let from = home.appendingPathComponent(old)
       if fm.fileExists(atPath: from.path), !fm.fileExists(atPath: new.path) { try? fm.moveItem(at: from, to: new) }
     }
@@ -179,7 +200,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     sigterm = source
     item.button?.target = self
     item.button?.action = #selector(statusClicked)
-    item.button?.setAccessibilityLabel("BRB")
+    item.button?.setAccessibilityLabel("Back in 5")
     panel.anchor = { [weak self] in self?.item.button }
     let m = panel.model
     m.onArm = { [weak self] silentOnce in self?.arm(silentOnce: silentOnce) }
@@ -219,6 +240,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     resume()
     syncPhone()
     openAtLogin()
+    GuardApp.retireOldApp()
     if !Prefs.introSeen && phase == .idle {  // first launch: a menu-bar app is easy to miss
       DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
         guard let self, phase == .idle, !panel.isShown else { return }
@@ -269,7 +291,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     let app = NSMenu()
     app.addItem(withTitle: L("Settings…"), action: #selector(openSettings), keyEquivalent: ",").target = self
     app.addItem(.separator())
-    app.addItem(withTitle: L("Quit BRB"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+    app.addItem(withTitle: L("Quit Back in 5"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     let edit = NSMenu(title: "Edit")
     edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
     edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z").keyEquivalentModifierMask = [.command, .shift]
