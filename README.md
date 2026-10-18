@@ -99,7 +99,7 @@ power button, so the power button waits 400 ms for the finger before it counts.
 
 The page runs on the relay in `relay/`, a Cloudflare Worker; out of the box the app uses the
 author's. To run your own: `cd relay && npx wrangler deploy`, then
-`defaults write com.allen.guard-mode relayHost <your-worker>.workers.dev` and restart BRB.
+`defaults write com.allen.brb.mac relayHost <your-worker>.workers.dev` and restart BRB.
 Optionally set `CAM_IDS` on the Worker to the room ids allowed to connect (the part of the panel's
 phone link after `/v/`).
 

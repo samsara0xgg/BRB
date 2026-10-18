@@ -62,6 +62,21 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     }
   }
 
+  /// The app's id was com.allen.guard-mode until 1.1. Its settings, the relay key and the token the
+  /// paired phones hold live under that id: copied over once, so nothing is set up or paired again.
+  /// Not the login item (registered under the old id) or the ntfy alerts, which are gone.
+  static func adoptOldSettings() {
+    let d = UserDefaults.standard, oldID = "com.allen.guard-mode"
+    guard let id = Bundle.main.bundleIdentifier, id != oldID, !d.bool(forKey: "adoptedOldSettings") else { return }
+    let mine = d.persistentDomain(forName: id) ?? [:]
+    let old = d.persistentDomain(forName: oldID) ?? [:]
+    let skip: Set = ["loginItemAdded", "pushEnabled", "ntfyTopic"]
+    let moved = old.filter { mine[$0.key] == nil && !skip.contains($0.key) }
+    for (key, value) in moved { d.set(value, forKey: key) }
+    d.set(true, forKey: "adoptedOldSettings")
+    if !moved.isEmpty { log("settings brought over from \(oldID): \(moved.count)") }
+  }
+
   /// The app was called Guard Mode until October 2026: its state and recordings move over once.
   static func moveOldFolders() {
     let fm = FileManager.default, home = fm.homeDirectoryForCurrentUser

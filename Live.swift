@@ -163,7 +163,7 @@ enum MacInfo {
 /// that alarm is disarmed. Without either,
 /// the page shows only whether the Mac is guarded. A paired phone holds the owner's token too.
 final class Live {
-  /// The author's relay, unless `defaults write com.allen.guard-mode relayHost <host>` names your own.
+  /// The author's relay, unless `defaults write com.allen.brb.mac relayHost <host>` names your own.
   static var host: String {
     let own = UserDefaults.standard.string(forKey: "relayHost") ?? ""
     return own.isEmpty ? "guardmode-relay.guardmode-gf1n2.workers.dev" : own

@@ -66,12 +66,17 @@ jobs:
           sudo visudo -cf /etc/sudoers.d/brb
           sudo rm /etc/sudoers.d/brb
           : > ~/Library/Logs/brb.log
+          # A setting saved under the app's old id (until 1.1) is carried over on the first launch.
+          defaults write com.allen.guard-mode brbProbe -string carried
+          defaults delete com.allen.brb.mac adoptedOldSettings 2>/dev/null || true
           open /Applications/BRB.app
           sleep 6
           pgrep -x brb
           cat ~/Library/Logs/brb.log
           grep -q "login items" ~/Library/Logs/brb.log
           grep -q "relaunch watcher started" ~/Library/Logs/brb.log
+          grep -q "settings brought over from com.allen.guard-mode" ~/Library/Logs/brb.log
+          test "$(defaults read com.allen.brb.mac brbProbe)" = carried
           # A crash or kill -9 brings this copy back, as launchd does for install.sh's; SIGTERM ends it.
           first=$(pgrep -x brb)
           kill -9 "$first"
