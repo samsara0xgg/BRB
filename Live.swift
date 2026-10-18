@@ -166,7 +166,7 @@ final class Live {
   /// The author's relay, unless `defaults write com.allen.brb.mac relayHost <host>` names your own.
   static var host: String {
     let own = UserDefaults.standard.string(forKey: "relayHost") ?? ""
-    return own.isEmpty ? "guardmode-relay.guardmode-gf1n2.workers.dev" : own
+    return own.isEmpty ? "api.backin5.app" : own
   }
 
   /// The Mac's secret: it connects as the camera with it.
