@@ -6,6 +6,11 @@ import StoreKit
 final class Entitlements {
   static let productID = "com.allen.brb.pro"
 
+  /// 1.0 sells nothing: no plan card, paywall or restore, no Apple Watch app (project.yml builds it but
+  /// doesn't embed it), and every phone tells the relay it has no Pro, so photos stay 7 days. Turn this on
+  /// with the in-app purchase in App Store Connect and the Watch app's `embed`.
+  static let onSale = false
+
   var pro = Prefs.pro
   var product: Product?
   var busy = false
@@ -19,6 +24,7 @@ final class Entitlements {
       pro = true
       return
     }
+    guard Entitlements.onSale else { set(false); return }
     updates = Task { [weak self] in
       for await result in Transaction.updates {
         guard let self else { return }

@@ -99,7 +99,7 @@ extension AppStore {
     case .mac(let id): route(toMac: id, alarm: false)
     case .alarm(let id): route(toMac: id, alarm: true)
     case .addMac: onboarding = Onboarding(step: .scan, extra: true)
-    case .pro: sheet = .paywall
+    case .pro: if Entitlements.onSale { sheet = .paywall }
     case nil:
       // `brb://mac?id=<id>&alarm=1`, the older shape.
       guard url.scheme == "brb", url.host == "mac" else { return }
@@ -205,7 +205,7 @@ extension AppStore {
     }
   }
 
-  private var afterNotifications: Onboarding.Step { Capabilities.criticalAlerts || isDemo ? .crit : .scan }
+  private var afterNotifications: Onboarding.Step { Capabilities.criticalAlerts ? .crit : .scan }
 
   func allowNotifications() async {
     if notif == .denied {

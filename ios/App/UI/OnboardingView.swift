@@ -348,6 +348,13 @@ struct ScanStep: View {
         .font(.system(size: 15, weight: .medium))
         .foregroundStyle(.white.opacity(0.75))
         .frame(height: 40)
+      Button(t("scNoMac")) {
+        store.onboarding?.cameFrom = .scan
+        store.onboarding?.step = .nomac
+      }
+      .font(.system(size: 15, weight: .medium))
+      .foregroundStyle(.white.opacity(0.75))
+      .frame(height: 40)
     }
     .padding(.horizontal, 30)
     .frame(maxWidth: .infinity, maxHeight: .infinity)

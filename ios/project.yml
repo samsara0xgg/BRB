@@ -40,6 +40,7 @@ targets:
       - target: BRBWidgets
       - target: BRBNotifications
       - target: BRBWatch
+        embed: false  # 1.0 ships without the Watch app; see Entitlements.onSale
     entitlements:
       path: App/BRB.entitlements
       properties:
@@ -55,7 +56,6 @@ targets:
           UIColorName: LaunchBackground
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIRequiresFullScreen: true
-        UIBackgroundModes: [remote-notification]
         NSSupportsLiveActivities: true
         NSSupportsLiveActivitiesFrequentUpdates: true
         NSCameraUsageDescription: The camera only reads the code on your Mac. Nothing is photographed or recorded.

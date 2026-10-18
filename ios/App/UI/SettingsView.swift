@@ -19,7 +19,9 @@ struct SettingsView: View {
         if store.pageState == "error" {
           ErrorBanner(title: t("setErrT"), message: t("setErrS"), retry: nil).padding(.bottom, 10)
         }
-        if store.pageState == "loading" {
+        if !Entitlements.onSale {
+          EmptyView()
+        } else if store.pageState == "loading" {
           VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
               Skeleton(width: 44, height: 44, radius: 12)
@@ -106,7 +108,7 @@ struct SettingsView: View {
         ToggleRow(
           title: t("n_allow"),
           isOn: Binding(get: { notifOn }, set: { _ in store.fixNotifications() }))
-        if Capabilities.criticalAlerts || store.isDemo {
+        if Capabilities.criticalAlerts {
           Hairline(inset: 14)
           ToggleRow(
             title: t("n_crit"), subtitle: t("n_critS"), isOn: Binding(get: { store.criticalAlerts && notifOn }, set: { store.setCritical($0) }),

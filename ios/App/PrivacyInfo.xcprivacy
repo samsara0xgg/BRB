@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- App Store Connect refuses an upload whose targets use these APIs without saying why. UserDefaults: the app's own (CA92.1) and the app group shared with the widgets and the Watch (1C8F.1). File timestamps: the alarm photo cache ages its own files (C617.1). Collected: the Mac's alarm photos and a random device id, kept by the relay only to show and push the alarm; keep in step with the App Privacy answers. -->
+<!-- App Store Connect refuses an upload whose targets use these APIs without saying why. UserDefaults: the app's own (CA92.1) and the app group shared with the widgets and the Watch (1C8F.1). File timestamps: the alarm photo cache ages its own files (C617.1). Collected, all kept by the relay only to run the app: the Mac's alarm photos, a random device id, the note for the Mac's screen (other user content) and the session history (product interaction); keep in step with the App Privacy answers. -->
 <plist version="1.0">
 <dict>
   <key>NSPrivacyTracking</key>
@@ -24,6 +24,30 @@
     <dict>
       <key>NSPrivacyCollectedDataType</key>
       <string>NSPrivacyCollectedDataTypeDeviceID</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+      </array>
+    </dict>
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+      </array>
+    </dict>
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypeProductInteraction</string>
       <key>NSPrivacyCollectedDataTypeLinked</key>
       <false/>
       <key>NSPrivacyCollectedDataTypeTracking</key>

@@ -80,7 +80,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
   }
 
-  /// A silent push (content-available): refresh the Macs so the widgets and the Watch are up to date.
+  /// A silent push (content-available): refresh the Macs so the widgets and the Watch are up to date. The relay
+  /// sends none today, so the app doesn't ask for the remote-notification background mode.
   func application(
     _ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void

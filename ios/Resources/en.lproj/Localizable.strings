@@ -294,10 +294,10 @@
 "faceReqS" = "Confirms it’s you before you disarm or stop";
 "g_priv" = "Privacy & data";
 "privRow" = "When it films, what, and for how long";
-"delCloud" = "Delete all my photos and videos in the cloud";
-"delCloudT" = "Delete your cloud photos and videos?";
-"delCloudP" = "Your history stays. Deleted photos and videos can’t be recovered. Videos on the Mac are not affected.";
-"delCloudDone" = "Photos and videos deleted from the cloud";
+"delCloud" = "Delete all my photos in the cloud";
+"delCloudT" = "Delete your photos in the cloud?";
+"delCloudP" = "Your history stays. Deleted photos can’t be recovered. Recordings on the Mac are not affected.";
+"delCloudDone" = "Photos deleted from the cloud";
 "g_lang" = "Language";
 "langRow" = "App language";
 "langV" = "System";
@@ -322,7 +322,7 @@
 "pv_whatT" = "What it keeps";
 "pv_what" = "The 10 seconds before the alarm, what follows, and a few photos.";
 "pv_howT" = "How long";
-"pv_how" = "Photos stay in the cloud for 7 days. With Pro, photos and videos stay 30 days. Videos on the Mac stay until you delete them.";
+"pv_how" = "Photos stay in the cloud for 7 days. Recordings on the Mac are deleted after 7 days.";
 "pv_blurT" = "Passers-by blurred";
 "pv_blur" = "Faces in the background are blurred. Only the person closest to the Mac is clear.";
 "pv_liveT" = "No peeking";

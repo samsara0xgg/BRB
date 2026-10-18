@@ -32,7 +32,7 @@ struct DeviceRegistration: Sendable, Equatable {
   func json() -> [String: Any] {
     var j: [String: Any] = [
       "dev": dev, "name": name, "env": sandbox ? "sandbox" : "production", "lang": isZh ? "zh" : "en",
-      "crit": crit, "pro": pro, "events": events,
+      "crit": crit, "pro": pro, "events": events, "tz": TimeZone.current.identifier,
     ]
     if let apns { j["apns"] = apns }
     if let la { j["la"] = la } else { j["la"] = NSNull() }
