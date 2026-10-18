@@ -63,15 +63,15 @@ describe("pages", () => {
   });
 });
 
-describe("pages without a support address", () => {
+describe("pages without a usable support address", () => {
   let bare;
-  before(async () => { bare = await startRelay({ MAC_DOWNLOAD: "https://example.com/BRB.dmg" }); });
+  before(async () => { bare = await startRelay({ SUPPORT_EMAIL: "not an address", MAC_DOWNLOAD: "https://example.com/BRB.dmg" }); });
   after(async () => { await bare?.stop(); });
 
-  test("say the address is coming, and /mac goes where MAC_DOWNLOAD says", async () => {
+  test("give support@backin5.app, and /mac goes where MAC_DOWNLOAD says", async () => {
     const r = await bare.http("GET", "/support?lang=zh");
-    assert.match(r.text, /支持邮箱即将公布/);
-    assert.doesNotMatch(r.text, /mailto:/);
+    assert.match(r.text, /mailto:support@backin5\.app\?/);
+    assert.doesNotMatch(r.text, /not an address/);
     const mac = await fetch(`http://${bare.origin}/mac`, { redirect: "manual" });
     assert.equal(mac.headers.get("location"), "https://example.com/BRB.dmg");
   });

@@ -3,8 +3,8 @@
 // which sends people to the Mac download. Until the website has a home page, / opens /support. The links live here rather than in the apps so a page, the
 // support address or the download can change without an app update.
 //
-// Optional: SUPPORT_EMAIL, the address the pages give; MAC_DOWNLOAD, where /mac goes (the latest
-// GitHub release by default).
+// Optional: SUPPORT_EMAIL, the address the pages give (support@backin5.app by default); MAC_DOWNLOAD,
+// where /mac goes (the latest GitHub release by default).
 
 import privacyEn from "./legal/privacy.en.md";
 import privacyZh from "./legal/privacy.zh.md";
@@ -12,6 +12,7 @@ import termsEn from "./legal/terms.en.md";
 import termsZh from "./legal/terms.zh.md";
 
 const MAC_DOWNLOAD = "https://github.com/samsara0xgg/BRB/releases/latest/download/Back-in-5.dmg";
+const SUPPORT_EMAIL = "support@backin5.app";
 
 /// The day the privacy policy and terms last changed. Bump it with them.
 const UPDATED = "2026-10-18";
@@ -28,7 +29,7 @@ export function site(request, env, route, url) {
   }
   const lang = language(url, request);
   const doc = { privacy: PRIVACY, terms: TERMS, support: SUPPORT }[route][lang];
-  const body = (doc.md ? markdown(doc.md, lang) : doc.body).replaceAll("{{email}}", email(env.SUPPORT_EMAIL, lang));
+  const body = (doc.md ? markdown(doc.md, lang) : doc.body).replaceAll("{{email}}", email(env.SUPPORT_EMAIL));
   return new Response(shell(route, lang, doc.title, body), {
     headers: {
       "content-type": "text/html; charset=utf-8",
@@ -46,9 +47,9 @@ function language(url, request) {
   return /^\s*zh\b/i.test(request.headers.get("accept-language") ?? "") ? "zh" : "en";
 }
 
-function email(address, lang) {
-  const a = (address ?? "").trim();
-  if (!/^[^\s@<>"&]+@[^\s@<>"&]+\.[^\s@<>"&]+$/.test(a)) return lang === "zh" ? "（支持邮箱即将公布）" : "(support address coming soon)";
+function email(address) {
+  const given = (address ?? "").trim();
+  const a = /^[^\s@<>"&]+@[^\s@<>"&]+\.[^\s@<>"&]+$/.test(given) ? given : SUPPORT_EMAIL;
   return `<a href="mailto:${a}?subject=Back%20in%205">${a}</a>`;
 }
 
