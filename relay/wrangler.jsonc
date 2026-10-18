@@ -5,6 +5,8 @@
   "name": "guardmode-relay",
   "main": "worker.js",
   "compatibility_date": "2026-09-01",
+  // The privacy policy and terms (legal/*.md), bundled as text for site.js.
+  "rules": [{ "type": "Text", "globs": ["**/*.md"], "fallthrough": true }],
   "durable_objects": {
     "bindings": [
       { "name": "ROOMS", "class_name": "Room" },

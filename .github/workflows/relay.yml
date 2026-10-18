@@ -30,7 +30,7 @@ jobs:
       - run: npm ci
       - name: Syntax
         run: |
-          for module in worker apns; do
+          for module in worker apns site; do
             cp "$module.js" "$RUNNER_TEMP/$module.mjs"
             node --check "$RUNNER_TEMP/$module.mjs"
           done

@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import * as apns from "./apns.js";
+import { PAGES, site } from "./site.js";
 
 // One Room per Mac. The Mac connects to /cam/<key>; phones open /v/<id>#<token> and watch
 // /watch/<id>?t=<token>, where id = the first 32 hex chars of sha256(key). The id alone shows only
@@ -18,7 +19,8 @@ import * as apns from "./apns.js";
 // lets every page watch, as before.
 //
 // Optional: CAM_IDS, a comma-separated list of the room ids allowed to connect as a camera; APNS_KEY,
-// APNS_KEY_ID, APNS_TEAM_ID and APNS_TOPIC (secrets) to push to the iPhone app.
+// APNS_KEY_ID, APNS_TEAM_ID and APNS_TOPIC (secrets) to push to the iPhone app. The public pages
+// (/privacy, /terms, /support, /mac) are in site.js.
 
 const TOKEN = /^[a-z0-9]{8,64}$/;
 const DEVICE = /^[A-Za-z0-9-]{8,64}$/;
@@ -47,6 +49,7 @@ export default {
     const url = new URL(request.url);
     const [, route, a, b] = url.pathname.split("/");
     if (route === "claim") return claim(request, env, url);
+    if (PAGES.has(route) && !a) return site(request, env, route, url);
     if (!TOKEN.test(a ?? "")) return text("not found", 404);
     if (route === "v" && request.method === "GET") return html(PAGE);
     if (route === "pair" && request.method === "GET") return html(PAIR_PAGE);
