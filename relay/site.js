@@ -163,8 +163,6 @@ const SUPPORT = {
   <h2>Questions</h2>
   <h3>How do I pair my iPhone with my Mac?</h3>
   <p>On the Mac, click the BRB shield in the menu bar and choose “Settings…”, then “Phone” and “Pair iPhone…”. Scan the code on the Mac's screen with BRB on your iPhone, or type the six digits.</p>
-  <h3>Will my phone ring on silent?</h3>
-  <p>Yes, with “Ring when silenced” on. Only alarms use it.</p>
   <h3>A friend bumped my Mac. Now what?</h3>
   <p>Tap Disarm on the alarm screen and confirm with Face ID, or use Touch ID on the Mac.</p>
   <h3>Stop siren or Disarm?</h3>
@@ -183,8 +181,6 @@ const SUPPORT = {
   <h2>常见问题</h2>
   <h3>怎么把 iPhone 和 Mac 配对？</h3>
   <p>在 Mac 上点菜单栏的 BRB 盾牌，选「设置…」，再点「手机」和「配对 iPhone…」。用 iPhone 上的 BRB 扫 Mac 屏幕上的码，或者输入那 6 位数字。</p>
-  <h3>手机静音时，报警会响吗？</h3>
-  <p>打开「静音也响」就会。只有报警用它。</p>
   <h3>朋友不小心碰了电脑怎么办？</h3>
   <p>在报警页点「解除警报」，用 Face ID 确认；或者回到 Mac 前按指纹。</p>
   <h3>「停止鸣笛」和「解除警报」有什么不同？</h3>

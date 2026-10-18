@@ -359,7 +359,9 @@ struct FAQView: View {
   var body: some View {
     ScrollView {
       VStack(spacing: 10) {
-        InfoCard(symbol: "questionmark.circle", title: t("faqQ1"), text: t("faqA1"))
+        if Capabilities.criticalAlerts {  // "Ring when silenced" needs Apple's entitlement
+          InfoCard(symbol: "questionmark.circle", title: t("faqQ1"), text: t("faqA1"))
+        }
         InfoCard(symbol: "questionmark.circle", title: t("faqQ2"), text: t("faqA2"))
         InfoCard(symbol: "questionmark.circle", title: t("faqQ3"), text: t("faqA3"))
         Grp {
