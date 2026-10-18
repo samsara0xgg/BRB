@@ -82,7 +82,7 @@ struct WActivityModel {
     switch stage {
     case .guarding: return t("la_guard", placeName)
     case .warn, .siren, .back, .hushed: return triggerTitle
-    default: return "BRB"
+    default: return "Back in 5"
     }
   }
 

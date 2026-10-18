@@ -319,5 +319,9 @@ struct Claimed: Equatable, Sendable {
 }
 
 enum RelayDefaults {
-  static let host = "guardmode-relay.guardmode-gf1n2.workers.dev"
+  /// What a new pairing uses. A pairing keeps the host it was made with, and the relay's old
+  /// workers.dev name reaches the same rooms, so changing this never breaks one.
+  static let host = "api.backin5.app"
+  /// The website: the support page, the privacy policy and terms, and the Mac download.
+  static let site = "backin5.app"
 }

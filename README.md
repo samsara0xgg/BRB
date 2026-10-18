@@ -1,11 +1,11 @@
-# BRB
+# Back in 5
 
-**Be right back.** Off for a coffee, a call or the restroom? Leave your MacBook on the table.
-BRB keeps watch until you're back.
+**Back in 5.** Off for a coffee, a call or the restroom? Leave your MacBook on the table.
+Back in 5 keeps watch until you're back.
 
-**[Download BRB.dmg](https://github.com/samsara0xgg/BRB/releases/latest/download/BRB.dmg)** · [中文说明](README.zh-CN.md)
+**[Download Back-in-5.dmg](https://github.com/samsara0xgg/BRB/releases/latest/download/Back-in-5.dmg)** · [中文说明](README.zh-CN.md)
 
-BRB is a menu-bar guard for leaving a MacBook on a library or café table. While it guards, every screen
+Back in 5 is a menu-bar guard for leaving a MacBook on a library or café table. While it guards, every screen
 turns to frosted glass with one line on it: please don't touch. Walking past records nothing.
 Touching it floods the screen red from where it was touched, locks it, sounds the alarm, saves
 the 10 seconds before and everything after, and tells your phone.
@@ -14,21 +14,21 @@ Apple Silicon MacBooks, macOS 14 or later. On macOS 26 the notice is Liquid Glas
 
 ## Install
 
-[Download BRB.dmg](https://github.com/samsara0xgg/BRB/releases/latest/download/BRB.dmg), open it, drag **BRB** into **Applications** and open it from there.
-It needs a MacBook with Apple silicon and macOS 14 or later. A shield appears in the menu bar, BRB
+[Download Back-in-5.dmg](https://github.com/samsara0xgg/BRB/releases/latest/download/Back-in-5.dmg), open it, drag **Back in 5** into **Applications** and open it from there.
+It needs a MacBook with Apple silicon and macOS 14 or later. A shield appears in the menu bar, Back in 5
 adds itself to your login items, and the panel opens by itself:
 
 1. **Three cards** say what it does, what it records, and how to stop it.
-2. **Try a silent run.** BRB asks for Accessibility (to notice the keyboard and trackpad) and
+2. **Try a silent run.** Back in 5 asks for Accessibility (to notice the keyboard and trackpad) and
    the camera; the panel lists anything still missing, with a button to fix each one. Keeping the
    Mac awake with the lid shut needs a one-line admin rule, installed with your password once.
 3. **Touch the trackpad** once the screen has frosted over: it turns red and locks, as it would for
    a stranger, but stays silent. Unlock, or rest a finger on Touch ID, to stop. Test mode switches
    itself off afterwards.
 
-**How it works** at the bottom of the panel shows the cards again. To remove BRB, quit it from the
+**How it works** at the bottom of the panel shows the cards again. To remove Back in 5, quit it from the
 panel, drag it to the Trash, and remove the lid rule with `sudo rm /etc/sudoers.d/brb`. Recordings
-stay in `~/Movies/BRB/`. The log is at `~/Library/Logs/brb.log`.
+stay in `~/Movies/Back in 5/`. The log is at `~/Library/Logs/brb.log`.
 
 ### From source
 
@@ -36,7 +36,7 @@ You also need Apple's command line tools (`xcode-select --install`, if you don't
 
 ```sh
 git clone https://github.com/samsara0xgg/BRB.git
-cd BRB
+cd Back in 5
 ./install.sh
 ```
 
@@ -82,7 +82,7 @@ power button, so the power button waits 400 ms for the finger before it counts.
 
 - From the countdown on, the camera keeps only the last 10 seconds, in memory. Nothing reaches the
   disk unless the Mac is touched.
-- A trigger saves those 10 seconds and what follows to `~/Movies/BRB/` (kept 7 days, 20 GB at
+- A trigger saves those 10 seconds and what follows to `~/Movies/Back in 5/` (kept 7 days, 20 GB at
   most).
 - In the recording, the photos and the phone page, every face except the closest one is
   pixellated: the person at the laptop is recognizable, people passing behind them are not.
@@ -90,18 +90,16 @@ power button, so the power button waits 400 ms for the finger before it counts.
 
 ## Phone
 
-- **Alerts** (optional) go through [ntfy](https://ntfy.sh). Turn them on in the panel, scan the code
-  with the ntfy app, and send a test. An alarm sends what happened and a photo; a disarm follows.
-  The topic name is the only secret, and ntfy.sh keeps a photo for 3 hours.
+- **Alerts** reach the iPhone app (below): an alarm with what happened and a photo, then the disarm.
 - **The phone page** is a link in the panel, with a QR code. Before an alarm it shows whether the
-  Mac is guarded; after one, the live camera, up to 6 photos (kept 7 days) and what happened. It
-  can only watch. The link in an alarm push works only until that alarm is disarmed, because ntfy
-  keeps its messages; the panel's link keeps working. **Reset link** in the panel makes the old
+  Mac is guarded; after one, the live camera, up to 3 photos (kept 7 days) and what happened. It
+  can only watch. The link in an alarm push works only until that alarm is disarmed; the panel's
+  link keeps working. **Reset link** in the panel makes the old
   one stop working and forgets what the relay kept.
 
 The page runs on the relay in `relay/`, a Cloudflare Worker; out of the box the app uses the
-author's. To run your own: `cd relay && npx wrangler deploy`, then
-`defaults write com.allen.guard-mode relayHost <your-worker>.workers.dev` and restart BRB.
+author's. To run your own: remove `routes` from `relay/wrangler.jsonc` (they are the author's domain), `cd relay && npx wrangler deploy`, then
+`defaults write com.allen.brb.mac relayHost <your-worker>.workers.dev` and restart Back in 5.
 Optionally set `CAM_IDS` on the Worker to the room ids allowed to connect (the part of the panel's
 phone link after `/v/`).
 
@@ -114,7 +112,7 @@ The protocol is in `relay/PROTOCOL.md`; `cd relay && npm ci && npm test` runs th
 
 ## Commands
 
-`build/BRB.app/Contents/MacOS/brb <command>`:
+`"build/Back in 5.app/Contents/MacOS/brb" <command>`:
 
 | command | what | noise |
 |---|---|---|
@@ -124,7 +122,7 @@ The protocol is in `relay/PROTOCOL.md`; `cd relay && npm ci && npm test` runs th
 | `camera [s]` | buffers like a guarded session, saves halfway as a trigger would | silent |
 | `record [s]` | raw accelerometer and lid samples as CSV, for tuning offline | silent |
 | `siren [s]` | soft stage, then the siren, then the volume is restored | LOUD |
-| `live [s]` | camera on with live frames allowed, connected to the relay; prints the owner's link (`open -n -W build/BRB.app --args live 60` for the camera grant) | silent |
+| `live [s]` | camera on with live frames allowed, connected to the relay; prints the owner's link (`open -n -W "build/Back in 5.app" --args live 60` for the camera grant) | silent |
 | `push` | the panel's test push, with a photo | silent on the Mac |
 | `snapshot <stage> [png]` | shows the frosted screen at `countdown`, `armed`, `test`, `alarm` or `welcome`, or the `panel` / `notready` page, for 3.5 s; add `-AppleLanguages "(zh-Hans)"` for Chinese | silent |
 
@@ -140,13 +138,13 @@ arguments differ.
 
 ## Development
 
-`./build.sh` builds `build/BRB.app`; `SIGN_IDENTITY=-` signs ad hoc. CI
+`./build.sh` builds `build/Back in 5.app`; `SIGN_IDENTITY=-` signs ad hoc. CI
 (`.github/workflows/build.yml`, macOS 26) builds, lints the plists and strings, runs
 `selftest --no-hardware`, and checks the relay's syntax, on pull requests and `main` only. It also
-installs from a downloaded copy of the source, and builds the disk image ad hoc and runs BRB from
+installs from a downloaded copy of the source, and builds the disk image ad hoc and runs Back in 5 from
 `/Applications`.
 
-`scripts/release.sh` publishes the download: it signs BRB with your Developer ID and the hardened
+`scripts/release.sh` publishes the download: it signs Back in 5 with your Developer ID and the hardened
 runtime, notarizes the app and the disk image, and makes the GitHub release for the version in
 `Info.plist`. It needs the certificate, a notarytool keychain profile (`NOTARY_PROFILE`) and the
 GitHub CLI; bump `CFBundleShortVersionString` and `CFBundleVersion` first.
@@ -185,7 +183,7 @@ Then the earlier live steps, all in test mode except the siren:
 
 ## Emergency stop
 
-`kill -9` relaunches the app and resumes the alarm. `bootout` sends SIGTERM, which disarms: it
+`kill -9` relaunches the app and resumes the alarm (install.sh's agent does that, and for the copy in Applications a small watcher Back in 5 starts with itself). `bootout` sends SIGTERM, which disarms: it
 restores the volume and lets the Mac sleep again, and the app stays down:
 
 ```sh

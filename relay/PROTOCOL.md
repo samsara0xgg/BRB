@@ -1,4 +1,4 @@
-# BRB relay protocol v3
+# Back in 5 relay protocol v3
 
 The relay (`worker.js`, a Cloudflare Worker with one Durable Object per Mac) sits between three
 kinds of clients:
@@ -33,7 +33,7 @@ The Mac asks for a pairing offer, shows it as a QR code and as six digits, and t
 
 The offer lives 10 minutes and is used once. A new offer replaces the Mac's previous one. The QR
 carries `https://<host>/pair/<qr>` (a `GET` on that URL shows a small page that says to open the
-BRB app and tries `brb://pair?c=<qr>&h=<host>`); the app also accepts the bare six digits.
+Back in 5 app and tries `brb://pair?c=<qr>&h=<host>`); the app also accepts the bare six digits.
 
 `POST /claim` (phone), JSON `{"code": "<6 digits or the qr string>", "device": "Allen's iPhone"}`
 
@@ -64,7 +64,7 @@ marked new. `clean()` in the relay drops anything else and clamps types.
 | `vol` | 0–100, **new** | siren volume |
 | `test` | bool | test mode: every stage runs without a sound |
 | `camera` | bool | the camera works this session |
-| `push` | bool | the Mac also sends ntfy alerts |
+| `push` | bool | the Mac also sent ntfy alerts; always false since the Mac dropped them |
 | `trigger` | `Trigger` raw value or null | `lifted tilted lidClosed lidMoved charger powerKey keyboard trackpad finger restarted` |
 | `at` | ms or null | when the alarm started |
 | `siren` | bool | the loud stage is playing |
@@ -157,8 +157,7 @@ registered device (for "send a test alert").
 
 When `APNS_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID` and `APNS_TOPIC` secrets are set, the relay sends APNs
 alerts on state changes (HTTP/2 to `api.push.apple.com`, or `api.sandbox.push.apple.com` per device
-`env`, ES256 JWT cached for 50 minutes). Without them it sends nothing and the Mac's ntfy alerts remain
-the only push.
+`env`, ES256 JWT cached for 50 minutes). Without them it sends no push at all.
 
 | event (from the state change) | level | `loc-key`s in the app's strings | category |
 | --- | --- | --- | --- |
@@ -202,7 +201,7 @@ notice for the Mac), `devices`, `pro`; tables `photos(t, pass, data)` (as in v2)
 A v2 Mac keeps working: it never says `hello` with `v: 3`, sends no `mac`, `health`, `stage`; the relay then
 treats `siren` as `stage: "siren"` and a missing `stage` in `triggered` as `soft`. The v2 phone page ignores new fields.
 The app needs a v3 Mac only for commands, history and the device cards; against a v2 Mac it shows
-the same screens read-only and says "update BRB on your Mac".
+the same screens read-only and says "update Back in 5 on your Mac".
 
 ## Decisions
 
@@ -261,7 +260,7 @@ Devices and push
   `phone` for a `phone` disarm, `fingerprint` for `fingerprint`, `unlock` and `password`, otherwise `null`. Updates are also sent
   when the Mac goes offline or returns and when a photo arrives, and are skipped when nothing the activity shows changed. A `start`
   carries an `alert` (`p_start`, or the alarm's) because Apple wants one to start an activity by push.
-- `POST /test-push` sends a plain `title`/`body` alert (`BRB`, in the device's `lang`) so it needs no string in the app. It answers
+- `POST /test-push` sends a plain `title`/`body` alert (`Back in 5`, in the device's `lang`) so it needs no string in the app. It answers
   `{"ok": true, "sent": n, "failed": m}`, or `501 {"error": "push not configured"}` without the APNS_* secrets.
 - `APNS_URL` (var, for tests) replaces Apple's host.
 

@@ -228,12 +228,12 @@ private struct GeneralPane: View {
         SwitchRow(title: L("Frosted screen"), sub: L("Shows the notice on every screen while guarding"), on: $model.veil)
       }
       SettingsGroup {
-        SettingsRow(title: L("How it works"), sub: L("Three cards on what BRB does")) {
+        SettingsRow(title: L("How it works"), sub: L("Three cards on what Back in 5 does")) {
           Button(L("Show again"), action: model.onIntro)
             .controlSize(.small)
         }
       }
-      Text(verbatim: "BRB \(version) · Be Right Back")
+      Text(verbatim: "Back in 5 · \(version)")
         .font(Theme.label)
         .foregroundStyle(.tertiary)
         .frame(maxWidth: .infinity)
@@ -389,7 +389,7 @@ private struct IPhoneGroup: View {
           }
           .controlSize(.small)
         } else {
-          SettingsRow(title: L("BRB on your iPhone"), sub: L("Stop the siren, disarm or start guarding from your phone, and see the history.")) {
+          SettingsRow(title: L("Back in 5 on your iPhone"), sub: L("Stop the siren, disarm or start guarding from your phone, and see the history.")) {
             Button(L("Pair iPhone…"), action: pairing.begin)
               .controlSize(.small)
           }
@@ -411,7 +411,7 @@ private struct IPhoneGroup: View {
           .id(offer.qr)
           .transition(.opacity)
         VStack(alignment: .leading, spacing: 10) {
-          Step(n: 1, text: L("Open the BRB app on your iPhone"))
+          Step(n: 1, text: L("Open the Back in 5 app on your iPhone"))
           Step(n: 2, text: L("Scan this code, or type the six digits"))
           Text(verbatim: offer.spaced)
             .font(.system(size: 26, weight: .semibold, design: .monospaced))
@@ -475,51 +475,6 @@ private struct PhonePane: View {
     VStack(alignment: .leading, spacing: 8) {
       SectionHead(L("iPhone app"))
       IPhoneGroup(pairing: model.pairing)
-      SectionHead(L("Alerts"))
-        .padding(.top, 12)
-      SettingsGroup {
-        SwitchRow(title: L("Send alerts to my phone"), sub: L("An alarm sends what happened and a photo"), on: $model.pushOn)
-        if model.pushOn {
-          RowDivider()
-          HStack(alignment: .top, spacing: 16) {
-            QRView(text: Push.subscribeURL.absoluteString)
-            VStack(alignment: .leading, spacing: 10) {
-              Step(n: 1, text: L("Install the free ntfy app"))
-              Step(n: 2, text: L("Scan this code, or paste the topic under + in ntfy"))
-              Step(n: 3, text: L("Send a test below"))
-            }
-            .padding(.top, 6)
-            Spacer(minLength: 0)
-          }
-          .padding(12)
-          .transition(.opacity)
-          RowDivider()
-          HStack(spacing: 8) {
-            Button(model.copied == "topic" ? L("Copied") : L("Copy topic")) { model.copy(Push.topic, as: "topic") }
-            Spacer(minLength: 8)
-            if model.sending {
-              ProgressView().controlSize(.small)
-            } else if let ok = model.testPush {
-              Label(ok ? L("Sent. Check your phone.") : L("Couldn't send. Check the network."),
-                    systemImage: ok ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .font(Theme.label)
-                .foregroundStyle(ok ? Theme.greenText : Theme.warn)
-                .transition(.opacity)
-            }
-            Button(L("Send a test"), action: model.sendTestPush)
-              .disabled(model.sending)
-          }
-          .controlSize(.small)
-          .padding(.horizontal, 12)
-          .frame(minHeight: 44)
-          .animation(.easeOut(duration: 0.2), value: model.testPush)
-          .transition(.opacity)
-        }
-      }
-      .animation(Theme.out(0.3), value: model.pushOn)
-      if model.pushOn {
-        Footnote(L("Alerts go through ntfy.sh. The topic name is the only key, and photos are kept there for 3 hours."))
-      }
       SectionHead(L("Phone page"))
         .padding(.top, 12)
       SettingsGroup {

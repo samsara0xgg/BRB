@@ -78,7 +78,7 @@ enum StatusIcon {
       return true
     }
     image.isTemplate = look == .idle
-    image.accessibilityDescription = "BRB"
+    image.accessibilityDescription = "Back in 5"
     return image
   }
 

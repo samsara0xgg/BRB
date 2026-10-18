@@ -29,7 +29,7 @@
 "No built-in camera: an alarm won't be recorded" = "没有内置摄像头：报警时不会录像";
 "Films only around an alarm" = "只在报警前后录像";
 "Allow it so an alarm can be recorded" = "允许后，报警时才能录像";
-"Turned off for BRB in System Settings" = "系统设置里关掉了 BRB 的摄像头权限";
+"Turned off for Back in 5 in System Settings" = "系统设置里关掉了 Back in 5 的摄像头权限";
 "Stay awake with the lid shut" = "合盖不睡眠";
 "Keeps guarding with the lid closed" = "合上盖子也继续警戒";
 "Needs an admin rule, installed once with your password" = "装一次管理员规则，需要你的密码";
@@ -49,7 +49,7 @@
 "Off" = "关";
 "Phone page" = "手机页面";
 "Recordings" = "录像";
-"Quit BRB" = "退出 BRB";
+"Quit Back in 5" = "退出 Back in 5";
 "Ready" = "就绪";
 "Checking…" = "检查中…";
 "1 thing to fix" = "还差 1 项";
@@ -77,18 +77,8 @@
 "Copied" = "已复制";
 "Install" = "安装";
 "Installing…" = "正在安装…";
-"BRB keeps the Mac awake with the lid shut while it guards." = "BRB 警戒时，合上盖子电脑也保持唤醒。";
+"Back in 5 keeps the Mac awake with the lid shut while it guards." = "Back in 5 警戒时，合上盖子电脑也保持唤醒。";
 "Set up" = "设置";
-"Send alerts to my phone" = "报警时通知手机";
-"An alarm sends what happened and a photo" = "报警时发送经过和一张照片";
-"Install the free ntfy app" = "安装免费的 ntfy App";
-"Scan this code, or paste the topic under + in ntfy" = "扫这个码，或在 ntfy 里点 + 粘贴订阅名";
-"Send a test below" = "在下面发一条测试";
-"Copy topic" = "复制订阅名";
-"Sent. Check your phone." = "已发送，看看手机。";
-"Couldn't send. Check the network." = "没发出去，检查一下网络。";
-"Send a test" = "发送测试";
-"Alerts go through ntfy.sh. The topic name is the only key, and photos are kept there for 3 hours." = "提醒经过 ntfy.sh。订阅名是唯一的钥匙，照片在那里保留 3 小时。";
 "Open this on your phone and keep it." = "在手机上打开并收藏它。";
 "Before an alarm it only shows whether this Mac is guarded. After one it shows the camera, the photos and what happened." = "报警前只显示电脑是否在警戒。报警后能看到画面、照片和经过。";
 "The page can only watch. It can't control this Mac." = "这个页面只能看，不能控制电脑。";
@@ -116,19 +106,18 @@
 "Preview…" = "试听…";
 "Sounds the siren at %d%% for under a second, even with headphones on." = "会用 %d%% 的音量响一下，不到 1 秒，戴着耳机也会外放。";
 "Play" = "播放";
-"Three cards on what BRB does" = "用三张卡片介绍 BRB";
+"Three cards on what Back in 5 does" = "用三张卡片介绍 Back in 5";
 "Show again" = "再看一遍";
-"Alerts" = "提醒";
 "New link made" = "已生成新链接";
 "Reset link…" = "重置链接…";
 "The old link stops working at once." = "旧链接会立即失效。";
 "The old link stops working at once. Paired iPhones are unpaired." = "旧链接会立即失效，已配对的 iPhone 也会解除配对。";
 "Reset" = "重置";
 "iPhone app" = "iPhone App";
-"BRB on your iPhone" = "iPhone 上的 BRB";
+"Back in 5 on your iPhone" = "iPhone 上的 Back in 5";
 "Stop the siren, disarm or start guarding from your phone, and see the history." = "用手机关掉警笛、解除警戒或开始警戒，也能查看历史记录。";
 "Pair iPhone…" = "配对 iPhone…";
-"Open the BRB app on your iPhone" = "在 iPhone 上打开 BRB";
+"Open the Back in 5 app on your iPhone" = "在 iPhone 上打开 Back in 5";
 "Scan this code, or type the six digits" = "扫描这个码，或输入六位数字";
 "Expires in %@" = "%@ 后失效";
 "The code works once and renews itself while this is open." = "这个码只能用一次，打开此页时会自动更新。";
@@ -152,24 +141,13 @@
 "All set" = "一切就绪";
 
 /* GuardApp.swift */
-"The motion sensor stopped. The lid, the charger and touch still count." = "运动传感器停了。合盖、拔电源和触碰仍会报警。";
 "Stop guarding" = "解除警戒";
 "Not guarding" = "未在警戒";
 "Not guarding · a new alarm to look at" = "未在警戒 · 有新的报警待查看";
 "Settings…" = "设置…";
 
 /* Push.swift */
-"%@ · Siren on" = "%@ · 警笛已响";
-"%@ · Screen locked, siren in 10 s" = "%@ · 已锁屏，10 秒后响警笛";
-"The siren is sounding" = "警笛响了";
-"It's been 10 s and nobody has disarmed it" = "已经响了 10 秒，还没有人解除";
 "Disarmed" = "已解除";
-"%@ · %@" = "%@ · %@";
-"BRB needs a look" = "BRB 需要你看一下";
-"Test: %@" = "测试：%@";
-"Watch live" = "看实时画面";
-"BRB test" = "BRB 测试";
-"If you see this, alarms will reach this phone." = "收到这条，报警时就会推送到这台手机。";
 
 /* History.swift */
 "Ignored 1 bump" = "忽略了 1 次轻碰";
@@ -227,7 +205,7 @@
 "On the go" = "路上";
 
 /* First-run introduction */
-"Welcome to BRB" = "欢迎使用 BRB";
+"Welcome to Back in 5" = "欢迎使用 Back in 5";
 "Start it before you step away" = "离开前打开它";
 "Every screen frosts over and asks people not to touch. Lifting, tilting or closing the Mac, a key or a click sounds the alarm." = "每块屏幕都会变成磨砂玻璃，提醒别人不要碰。拿起、倾斜、合上电脑，或者按键、点击，都会报警。";
 "Walking by isn't recorded" = "路过不会被录下";
@@ -238,7 +216,7 @@
 "Back" = "上一步";
 "Next" = "下一步";
 "Try a silent run" = "静音试一次";
-"BRB asks for Accessibility and the camera on the way." = "过程中会请你允许辅助功能和摄像头。";
+"Back in 5 asks for Accessibility and the camera on the way." = "过程中会请你允许辅助功能和摄像头。";
 "How it works" = "使用说明";
 "Later" = "以后再说";
 "in memory · 10 s" = "内存中 · 10 秒";

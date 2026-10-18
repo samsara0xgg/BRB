@@ -114,7 +114,7 @@ struct WWidgetView: View {
           .widgetAccentable()
           .lineLimit(1)
           .minimumScaleFactor(0.8)
-        Text(snap?.name ?? "BRB")
+        Text(snap?.name ?? "Back in 5")
           .font(.system(size: 12, weight: .medium))
           .lineLimit(1)
         Text(detail)

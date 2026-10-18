@@ -1,0 +1,4 @@
+/* 系统权限弹窗的说明。 */
+"NSCameraUsageDescription" = "相机只用来扫 Mac 上的码，不拍照，也不录像。";
+"NSFaceIDUsageDescription" = "解除警报或停止守护前，确认是你本人。";
+"NSPhotoLibraryAddUsageDescription" = "把报警照片和你分享的卡片存到“照片”。";

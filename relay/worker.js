@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import * as apns from "./apns.js";
+import { PAGES, site } from "./site.js";
 
 // One Room per Mac. The Mac connects to /cam/<key>; phones open /v/<id>#<token> and watch
 // /watch/<id>?t=<token>, where id = the first 32 hex chars of sha256(key). The id alone shows only
@@ -18,7 +19,8 @@ import * as apns from "./apns.js";
 // lets every page watch, as before.
 //
 // Optional: CAM_IDS, a comma-separated list of the room ids allowed to connect as a camera; APNS_KEY,
-// APNS_KEY_ID, APNS_TEAM_ID and APNS_TOPIC (secrets) to push to the iPhone app.
+// APNS_KEY_ID, APNS_TEAM_ID and APNS_TOPIC (secrets) to push to the iPhone app. The public pages
+// (/privacy, /terms, /support, /mac) are in site.js.
 
 const TOKEN = /^[a-z0-9]{8,64}$/;
 const DEVICE = /^[A-Za-z0-9-]{8,64}$/;
@@ -27,6 +29,7 @@ const HEX = /^[0-9a-fA-F]{16,400}$/;
 const MAX_FRAME = 200_000;
 const MAX_PHOTO = 300_000;
 const PHOTOS_PER_ALARM = 6;
+const PHOTOS_PER_ROOM = PHOTOS_PER_ALARM * 30;  // a pass is any string the camera sends, so cap the room too
 const SESSIONS_KEPT = 30;
 const QUEUE_KEPT = 8;
 const DEVICES_KEPT = 6;
@@ -46,6 +49,7 @@ export default {
     const url = new URL(request.url);
     const [, route, a, b] = url.pathname.split("/");
     if (route === "claim") return claim(request, env, url);
+    if (PAGES.has(route) && !a) return site(request, env, route, url);
     if (!TOKEN.test(a ?? "")) return text("not found", 404);
     if (route === "v" && request.method === "GET") return html(PAGE);
     if (route === "pair" && request.method === "GET") return html(PAIR_PAGE);
@@ -394,8 +398,8 @@ export class Room extends DurableObject {
   level(t) {
     if (this.wiped) return "reset";
     if (!this.owner) return "owner";
-    if (t && t === this.owner) return "owner";
-    if (t && this.state?.pass && t === this.state.pass && this.state.phase === "triggered") return "pass";
+    if (t && same(t, this.owner)) return "owner";
+    if (t && this.state?.pass && same(t, this.state.pass) && this.state.phase === "triggered") return "pass";
     if (t && this.oldPasses.includes(t)) return "expired";
     return "status";
   }
@@ -535,6 +539,7 @@ export class Room extends DurableObject {
   }
 
   async storePhoto(request, url) {
+    if (this.wiped) return text("reset", 410);
     const t = Number(url.searchParams.get("t"));
     const pass = url.searchParams.get("pass") ?? "";
     if (!Number.isSafeInteger(t) || t <= 0) return text("bad time", 400);
@@ -545,6 +550,7 @@ export class Room extends DurableObject {
     const sql = this.ctx.storage.sql;
     sql.exec("INSERT OR REPLACE INTO photos (t, pass, data) VALUES (?, ?, ?)", t, kept, data);
     sql.exec("DELETE FROM photos WHERE pass = ? AND t NOT IN (SELECT t FROM photos WHERE pass = ? ORDER BY t DESC LIMIT ?)", kept, kept, PHOTOS_PER_ALARM);
+    sql.exec("DELETE FROM photos WHERE t NOT IN (SELECT t FROM photos ORDER BY t DESC LIMIT ?)", PHOTOS_PER_ROOM);
     this.purge();
     if (this.pending && this.pending.pass === kept) {
       await this.flush(t);
@@ -708,8 +714,9 @@ export class Room extends DurableObject {
       const device = this.devices.find((d) => d.dev === push.dev);
       return { push, result: device ? await apns.sendPush(this.env, device, push) : null };
     }));
-    // Apple says this token is gone for good: stop asking.
-    const dead = results.filter(({ result }) => result?.status === 410);
+    // Apple says this token is gone for good, or the activity it updated just ended: stop using it,
+    // so the next session starts a new activity with laStart instead of updating the old one.
+    const dead = results.filter(({ push, result }) => result?.status === 410 || (push.field === "la" && push.body?.aps?.event === "end"));
     if (!dead.length) return;
     for (const { push } of dead) {
       const device = this.devices.find((d) => d.dev === push.dev);
@@ -868,7 +875,7 @@ const PAGE = `<!doctype html>
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0b0f1c">
-<title>BRB</title>
+<title>Back in 5</title>
 <style>
   :root {
     --bg: #0b0f1c; --ink: #eef1f8; --dim: rgba(238, 241, 248, .62); --faint: rgba(238, 241, 248, .38);
@@ -920,7 +927,7 @@ const PAGE = `<!doctype html>
 <main>
   <header>
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8 19.4 5.6v5.8c0 4.8-3.1 8.6-7.4 10.1-4.3-1.5-7.4-5.3-7.4-10.1V5.6Z" fill="#f6b544"/><circle cx="12" cy="11.4" r="2.4" fill="#2b1a00"/></svg>
-    <h1>BRB</h1>
+    <h1>Back in 5</h1>
     <span class="pill" id="pill"></span>
   </header>
   <div class="live" id="live" hidden><img id="frame" alt=""><span class="tag" id="age"></span><div class="empty" id="waiting"></div></div>
@@ -975,7 +982,7 @@ const PAGE = `<!doctype html>
   $("footer").textContent = T.footer;
   $("photosLabel").textContent = T.photos;
   $("timelineLabel").textContent = T.timeline;
-  document.title = "BRB";
+  document.title = "Back in 5";
 
   function chip(text, cls) {
     const el = document.createElement("span");
@@ -1135,7 +1142,7 @@ const PAIR_PAGE = `<!doctype html>
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
 <meta name="theme-color" content="#0b0f1c">
-<title>BRB</title>
+<title>Back in 5</title>
 <style>
   :root { --bg: #0b0f1c; --ink: #eef1f8; --dim: rgba(238, 241, 248, .62); --amber: #f6b544; color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -1160,10 +1167,10 @@ const PAIR_PAGE = `<!doctype html>
 <script>
   const zh = (navigator.languages || [navigator.language]).some((l) => /^zh/i.test(l || ""));
   document.documentElement.lang = zh ? "zh-Hans" : "en";
-  document.getElementById("title").textContent = zh ? "在 iPhone 上打开 BRB" : "Open BRB on your iPhone";
-  document.getElementById("sub").textContent = zh ? "如果没有自动打开，先安装 BRB，再回到这里点下面的按钮。" : "If it doesn't open by itself, install BRB, then come back and tap the button.";
+  document.getElementById("title").textContent = zh ? "在 iPhone 上打开 Back in 5" : "Open Back in 5 on your iPhone";
+  document.getElementById("sub").textContent = zh ? "如果没有自动打开，先安装 Back in 5，再回到这里点下面的按钮。" : "If it doesn't open by itself, install Back in 5, then come back and tap the button.";
   const open = document.getElementById("open");
-  open.textContent = zh ? "打开 BRB" : "Open BRB";
+  open.textContent = zh ? "打开 Back in 5" : "Open Back in 5";
   open.href = "brb://pair?c=" + encodeURIComponent(location.pathname.split("/")[2] || "") + "&h=" + encodeURIComponent(location.host);
   setTimeout(() => { location.href = open.href; }, 150);
 </script>

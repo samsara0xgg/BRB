@@ -68,7 +68,7 @@ struct ShareCard: View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 8) {
         AppMark(size: 24)
-        Text("BRB").font(.system(size: 16, weight: .heavy))
+        Text("Back in 5").font(.system(size: 16, weight: .heavy))
         Spacer()
         Text(Fmt.dateLong(nowMs())).font(.system(size: 12.5)).opacity(0.7)
       }
@@ -77,7 +77,7 @@ struct ShareCard: View {
         .font(.system(size: 25, weight: .heavy))
         .fixedSize(horizontal: false, vertical: true)
         .padding(.top, 14)
-      Text("Be Right Back · " + t("shareSub")).font(.system(size: 14)).opacity(0.7).padding(.top, 6)
+      Text(t("shareSub")).font(.system(size: 14)).opacity(0.7).padding(.top, 6)
 
       GeometryReader { geo in
         ZStack(alignment: .leading) {
@@ -272,7 +272,7 @@ struct EvidenceDocument: View {
             .font(.system(size: 13 * scale, design: .monospaced))
         }
       }
-      Text("BRB · " + Fmt.dateLong(nowMs())).font(.system(size: 10 * scale)).foregroundStyle(Color(hex: 0x8a8f9c)).padding(.top, 6 * scale)
+      Text("Back in 5 · " + Fmt.dateLong(nowMs())).font(.system(size: 10 * scale)).foregroundStyle(Color(hex: 0x8a8f9c)).padding(.top, 6 * scale)
     }
     .foregroundStyle(Color(hex: 0x10131c))
     .padding(compact ? 14 : 32)
@@ -353,7 +353,7 @@ struct EvidenceSheet: View {
       source = store.evidenceSource(mac: macID, record: recordID)
       if let source { images = await store.photoImages(of: source.mac, Array(source.photos.prefix(6))) }
     }
-    .fileExporter(isPresented: $exporting, document: pdf, contentType: .pdf, defaultFilename: "BRB-alarm") { result in
+    .fileExporter(isPresented: $exporting, document: pdf, contentType: .pdf, defaultFilename: "Back-in-5-alarm") { result in
       if case .success = result { store.show(t("ev_saved"), "doc.text") }
     }
     .sheet(item: $item) { it in ActivityView(items: it.items).presentationDetents([.medium, .large]) }
@@ -363,7 +363,7 @@ struct EvidenceSheet: View {
     guard let source else { return nil }
     let content = EvidenceDocument(source: source, images: images).frame(width: 595)
     let renderer = ImageRenderer(content: content)
-    let url = FileManager.default.temporaryDirectory.appendingPathComponent("BRB-alarm-\(Fmt.hms(source.at).replacingOccurrences(of: ":", with: "-")).pdf")
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("Back-in-5-alarm-\(Fmt.hms(source.at).replacingOccurrences(of: ":", with: "-")).pdf")
     var written = false
     renderer.render { size, draw in
       var box = CGRect(origin: .zero, size: size)

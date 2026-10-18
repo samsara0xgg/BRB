@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs /etc/sudoers.d/brb, so BRB can run `pmset disablesleep` without a password
+# Installs /etc/sudoers.d/brb, so Back in 5 can run `pmset disablesleep` without a password
 # and keep the Mac awake with the lid shut while it guards. Asks for your password once.
 set -e
 rule=$(mktemp)

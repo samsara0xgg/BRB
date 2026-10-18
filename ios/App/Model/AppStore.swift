@@ -83,7 +83,7 @@ final class AppStore {
   var recordsBadge = false
   var recordFilterAlarms = false
   var recordMac: String?
-  /// An error the whole screen should show instead of cards ("Can't reach BRB").
+  /// An error the whole screen should show instead of cards ("Can't reach Back in 5").
   var loadFailed = false
   /// The app is in front (so an alarm can open its page by itself).
   var appActive = true
@@ -147,6 +147,9 @@ final class AppStore {
       for m in macs { backend.attach(m); Task { await backend.refresh(m) } }
       refreshNotificationStatus()
       Task { await entitlements.refresh() }
+      // A registration lost to a bad network at pairing is sent again; without a token yet, the
+      // token's own callback does it.
+      if pushToken != nil { pushRegistrar.registerAll() }
     }
   }
 

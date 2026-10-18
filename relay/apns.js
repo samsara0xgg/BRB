@@ -155,7 +155,7 @@ export function testAlert({ id, device }) {
   const zh = device.lang === "zh";
   return {
     aps: {
-      alert: { title: "BRB", body: zh ? "测试提醒：能收到这条，说明报警会送到这台手机。" : "Test alert: if you see this, alarms will reach this phone." },
+      alert: { title: "Back in 5", body: zh ? "测试提醒：能收到这条，说明报警会送到这台手机。" : "Test alert: if you see this, alarms will reach this phone." },
       sound: "default", "thread-id": id, "interruption-level": "active",
     },
     id,

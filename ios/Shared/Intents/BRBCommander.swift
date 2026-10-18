@@ -136,7 +136,7 @@ enum BRBCommander {
   }
 
   private static func fallbackName(_ macID: String?, in macs: [PairedMac]) -> String {
-    (macs.first(where: { $0.id == macID }) ?? macs.first)?.displayName ?? "BRB"
+    (macs.first(where: { $0.id == macID }) ?? macs.first)?.displayName ?? "Back in 5"
   }
 
   // MARK: start, stop, hush

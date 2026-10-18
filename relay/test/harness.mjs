@@ -49,6 +49,8 @@ export async function startRelay(vars = {}, { dir = root } = {}) {
   const args = [
     join(root, "node_modules/wrangler/bin/wrangler.js"), "dev", "--local", "--ip", "127.0.0.1", "--port", String(port),
     "--inspector-port", String(inspector), "--persist-to", state,
+    // Requests keep the host they were sent to, rather than the first of wrangler.jsonc's routes.
+    "--local-upstream", `127.0.0.1:${port}`,
     ...Object.entries(vars).flatMap(([name, value]) => ["--var", `${name}:${value}`]),
   ];
   const quiet = `${process.env.NO_PROXY ?? ""},127.0.0.1,localhost`;

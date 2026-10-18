@@ -62,10 +62,46 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     }
   }
 
-  /// The app was called Guard Mode until October 2026: its state and recordings move over once.
+  /// The app's id was com.allen.guard-mode until 1.1. Its settings, the relay key and the token the
+  /// paired phones hold live under that id: copied over once, so nothing is set up or paired again.
+  /// Not the login item (registered under the old id) or the ntfy alerts, which are gone.
+  static func adoptOldSettings() {
+    let d = UserDefaults.standard, oldID = "com.allen.guard-mode"
+    guard let id = Bundle.main.bundleIdentifier, id != oldID, !d.bool(forKey: "adoptedOldSettings") else { return }
+    let mine = d.persistentDomain(forName: id) ?? [:]
+    let old = d.persistentDomain(forName: oldID) ?? [:]
+    let skip: Set = ["loginItemAdded", "pushEnabled", "ntfyTopic"]
+    let moved = old.filter { mine[$0.key] == nil && !skip.contains($0.key) }
+    for (key, value) in moved { d.set(value, forKey: key) }
+    d.set(true, forKey: "adoptedOldSettings")
+    if !moved.isEmpty { log("settings brought over from \(oldID): \(moved.count)") }
+  }
+
+  /// 1.0 was BRB.app, under the old id. Back in 5 lands next to it in Applications instead of
+  /// replacing it, and its login item would start a second guard at the next login: so a copy
+  /// installed in Applications quits the old one and puts it in the Trash.
+  static func retireOldApp() {
+    let oldID = "com.allen.guard-mode", fm = FileManager.default
+    guard Bundle.main.bundlePath.hasPrefix("/Applications/") else { return }
+    for dir in ["/Applications", fm.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path] {
+      let old = URL(fileURLWithPath: dir).appendingPathComponent("BRB.app")
+      guard Bundle(url: old)?.bundleIdentifier == oldID else { continue }
+      for app in NSRunningApplication.runningApplications(withBundleIdentifier: oldID) where app.bundleURL?.standardizedFileURL == old.standardizedFileURL {
+        kill(app.processIdentifier, SIGTERM)  // 1.0 puts the Mac back and quits on SIGTERM
+      }
+      do {
+        try fm.trashItem(at: old, resultingItemURL: nil)
+        log("moved the old BRB.app to the Trash")
+      } catch {
+        log("the old BRB.app stays in \(dir): \(error.localizedDescription)")
+      }
+    }
+  }
+
+  /// The app was called Guard Mode, then BRB until 1.1: its state and recordings move over once.
   static func moveOldFolders() {
     let fm = FileManager.default, home = fm.homeDirectoryForCurrentUser
-    for (old, new) in [("Library/Application Support/GuardMode", supportDir), ("Movies/GuardMode", Recorder.folder)] {
+    for (old, new) in [("Library/Application Support/GuardMode", supportDir), ("Movies/BRB", Recorder.folder), ("Movies/GuardMode", Recorder.folder)] {
       let from = home.appendingPathComponent(old)
       if fm.fileExists(atPath: from.path), !fm.fileExists(atPath: new.path) { try? fm.moveItem(at: from, to: new) }
     }
@@ -112,7 +148,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private var clip: URL?
   private var photos = 0
   private var photoTimes: [Int64] = []
-  private var latestPhoto: Data?
   // The menu-bar shield between sessions (audit C5, D4).
   /// The look it keeps while the notice flies back, so it changes as the notice lands.
   private var parked: StatusIcon.Look?
@@ -158,13 +193,14 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
     source.setEventHandler { [weak self] in
       self?.disarm(.stopped, exiting: true)
+      Relaunch.standDown()
       exit(0)
     }
     source.resume()
     sigterm = source
     item.button?.target = self
     item.button?.action = #selector(statusClicked)
-    item.button?.setAccessibilityLabel("BRB")
+    item.button?.setAccessibilityLabel("Back in 5")
     panel.anchor = { [weak self] in self?.item.button }
     let m = panel.model
     m.onArm = { [weak self] silentOnce in self?.arm(silentOnce: silentOnce) }
@@ -204,6 +240,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     resume()
     syncPhone()
     openAtLogin()
+    GuardApp.retireOldApp()
     if !Prefs.introSeen && phase == .idle {  // first launch: a menu-bar app is easy to miss
       DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
         guard let self, phase == .idle, !panel.isShown else { return }
@@ -230,6 +267,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
 
   func applicationWillTerminate(_ note: Notification) {
     if phase != .idle { disarm(.stopped, exiting: true) }
+    Relaunch.standDown()
   }
 
   @objc private func statusClicked() {
@@ -253,7 +291,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     let app = NSMenu()
     app.addItem(withTitle: L("Settings…"), action: #selector(openSettings), keyEquivalent: ",").target = self
     app.addItem(.separator())
-    app.addItem(withTitle: L("Quit BRB"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+    app.addItem(withTitle: L("Quit Back in 5"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     let edit = NSMenu(title: "Edit")
     edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
     edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "z").keyEquivalentModifierMask = [.command, .shift]
@@ -293,12 +331,12 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     clip = nil
     photos = 0
     photoTimes = []
-    latestPhoto = nil
     parked = nil
     landing = false
     stopIconAnimation()
     settings.close()
     Recorder.prune()
+    trimLog()  // a menu-bar app runs for weeks between launches
     phase = .arming
     setSleepDisabled(true)
     startWatching()
@@ -342,10 +380,10 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     m.note = Prefs.note
     m.armedAt = armedAt
     m.recording = recorder != nil
-    m.pushOn = Push.enabled
+    m.pushOn = Prefs.phonePaired
     m.locked = screenLocked
     var first = LiveState(phase: phase.rawValue, since: LiveState.ms(armedAt), armEnd: LiveState.ms(armedAt.addingTimeInterval(GuardApp.countdownSeconds)),
-                          place: Prefs.place.rawValue, note: Prefs.note, vol: volumePercent, push: Push.enabled, test: test, camera: recorder != nil)
+                          place: Prefs.place.rawValue, note: Prefs.note, vol: volumePercent, test: test, camera: recorder != nil)
     first.lastEnd = lastEnd
     if holding {  // the Mac's own details go to the relay only for a phone that is paired
       first.mac = mac ?? MacInfo.card()
@@ -449,7 +487,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
           degraded = true
           render()
           live.update(event: "warning", key: "motion") { if self.holding { $0.health = self.health } }
-          if Push.enabled { Push.warning(L("The motion sensor stopped. The lid, the charger and touch still count."), test: test) }
         }
       } else if silentSince != nil {
         silentSince = nil
@@ -500,7 +537,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     phase = .triggered
     log("TRIGGERED: \(kind.rawValue), \(detail)")
     fingerprint.stop(returnFocus: false)  // the lock screen takes over
-    veil.model.pushOn = Push.enabled
+    veil.model.pushOn = Prefs.phonePaired
     veil.alarm(pointer: pointer, origin: kind.floodOrigin)
 
     // The red spreads first, so whoever touched it sees why; the tap swallows input meanwhile.
@@ -538,7 +575,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
           $0.stage = Stage.siren.rawValue
           $0.softEnd = nil
         }
-        if Push.enabled { Push.siren(test: test, link: live.alarmLink, photo: latestPhoto) }
       }
     }
 
@@ -553,12 +589,10 @@ final class GuardApp: NSObject, NSApplicationDelegate {
       $0.carried = false
       $0.bumps = motion.bumps
     }
-    let link = live.alarmLink
     if let recorder {
       clip = recorder.save { [weak self] photo in
         guard let self else { return }
         if let photo, triggeredAt == at { took(photo) }
-        if Push.enabled { Push.alarm(kind, at: at, test: test, link: link, photo: photo) }
       }
       for delay in [2.0, 5.0] {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
@@ -569,8 +603,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
           }
         }
       }
-    } else if Push.enabled {
-      Push.alarm(kind, at: at, test: test, link: link, photo: nil)
     }
   }
 
@@ -578,7 +610,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     let at = Date()
     photos += 1
     photoTimes.append(LiveState.ms(at))
-    latestPhoto = photo
     live.upload(photo, at: at)
     live.event("photo", at: at)
   }
@@ -625,7 +656,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     if recorded { History.add(session) }
     // Test mode covers one run, then turns itself off (audit H1).
     if test && guarded { Prefs.testMode = false }
-    if trigger != nil && Push.enabled { Push.disarmed(how, at: now, test: test) }
     // One state with its event: the relay (and the push it may send) reads how it ended from them together.
     let last = lastEnd
     degraded = false
@@ -729,7 +759,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     s.place = Prefs.place.rawValue
     s.note = Prefs.note
     s.vol = volumePercent
-    s.push = Push.enabled
     s.test = Prefs.testMode  // the next run is a test
     s.camera = baseHealth.cam
     s.siren = false
@@ -987,7 +1016,12 @@ final class GuardApp: NSObject, NSApplicationDelegate {
         if !app.armedOnAC { log("charger plugged in while armed; unplugging it now triggers") }
         app.armedOnAC = true
       } else if app.armedOnAC {
-        app.fire(.charger, "charger unplugged")
+        // A loose power strip or a dock renegotiating drops the charger for a moment: only one
+        // that stays out counts.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+          guard app.phase == .armed, app.armedOnAC, !GuardApp.onAC() else { return }
+          app.fire(.charger, "charger unplugged")
+        }
       }
     }, me)?.takeRetainedValue() else { log("power-source notifications unavailable"); return }
     CFRunLoopAddSource(CFRunLoopGetMain(), src, .commonModes)

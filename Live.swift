@@ -37,7 +37,7 @@ struct LiveState: Encodable, Equatable {
   var place = ""
   var note = ""
   var vol = 100
-  var push = false
+  var push = false  // the Mac's old ntfy alerts: always false now, kept for the protocol
   var test = false
   var camera = false
   var trigger: String?
@@ -159,14 +159,14 @@ enum MacInfo {
 /// so the phone sees the Mac and its commands arrive at once.
 ///
 /// Who sees what: the link in the panel carries the owner's token after `#` (never sent in a request
-/// line, so never in a server log), and shows everything. The link in an alarm push carries a pass
-/// that works only until that alarm is disarmed, because ntfy keeps its messages. Without either,
+/// line, so never in a server log), and shows everything. The pass in an alarm push works only until
+/// that alarm is disarmed. Without either,
 /// the page shows only whether the Mac is guarded. A paired phone holds the owner's token too.
 final class Live {
-  /// The author's relay, unless `defaults write com.allen.guard-mode relayHost <host>` names your own.
+  /// The author's relay, unless `defaults write com.allen.brb.mac relayHost <host>` names your own.
   static var host: String {
     let own = UserDefaults.standard.string(forKey: "relayHost") ?? ""
-    return own.isEmpty ? "guardmode-relay.guardmode-gf1n2.workers.dev" : own
+    return own.isEmpty ? "api.backin5.app" : own
   }
 
   /// The Mac's secret: it connects as the camera with it.
@@ -257,12 +257,6 @@ final class Live {
     NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
       self?.reconnect()
     }
-  }
-
-  /// The link for this alarm's push: works until it is disarmed.
-  var alarmLink: URL {
-    guard let pass = state.pass else { return Live.link }
-    return URL(string: "https://\(Live.host)/v/\(Live.id)#\(pass)")!
   }
 
   private var active: Bool { running || wanted }

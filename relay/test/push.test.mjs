@@ -233,6 +233,20 @@ describe("live activity", () => {
     assert.equal(sent(running.la).every((p) => p.headers["apns-push-type"] === "liveactivity"), true);
   });
 
+  test("the session after an ended one starts a new activity instead of updating the old", async () => {
+    const d = device({ apns: null, la: hex(48), laStart: hex(48) });
+    const { mac, state } = await guarded([d]);
+    mac.send({ state: state() });
+    await find(d.la, event("update"));
+    mac.send({ state: macState({ events: [{ t: Date.now(), e: "disarmed", k: "fingerprint" }] }) });
+    await find(d.la, event("end"));
+    await sleep(300);  // the relay forgets the token once Apple has answered
+    const used = sent(d.la).length;
+    mac.send({ state: state({ phase: "arming", armEnd: Date.now() + 5000 }) });
+    await find(d.laStart, event("start"));
+    assert.equal(sent(d.la).length, used, "the ended activity's token is not used again");
+  });
+
   test("shows the Mac offline, and armed again when it is back", async () => {
     const d = device({ apns: null, la: hex(48) });
     const r = room();
@@ -257,7 +271,7 @@ describe("devices and tokens", () => {
     await register(r, b);
     const res = await relay.http("POST", `/test-push/${r.id}?t=${r.token}`);
     assert.deepEqual(res.json, { ok: true, sent: 1, failed: 0 });
-    const p = await find(a.apns, (body) => body.aps.alert.title === "BRB");
+    const p = await find(a.apns, (body) => body.aps.alert.title === "Back in 5");
     assert.match(p.body.aps.alert.body, /测试/);
     assert.equal(p.headers["apns-push-type"], "alert");
     assert.equal(sent(b.la).length, 0);

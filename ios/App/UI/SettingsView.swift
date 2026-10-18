@@ -19,7 +19,9 @@ struct SettingsView: View {
         if store.pageState == "error" {
           ErrorBanner(title: t("setErrT"), message: t("setErrS"), retry: nil).padding(.bottom, 10)
         }
-        if store.pageState == "loading" {
+        if !Entitlements.onSale {
+          EmptyView()
+        } else if store.pageState == "loading" {
           VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
               Skeleton(width: 44, height: 44, radius: 12)
@@ -106,7 +108,7 @@ struct SettingsView: View {
         ToggleRow(
           title: t("n_allow"),
           isOn: Binding(get: { notifOn }, set: { _ in store.fixNotifications() }))
-        if Capabilities.criticalAlerts || store.isDemo {
+        if Capabilities.criticalAlerts {
           Hairline(inset: 14)
           ToggleRow(
             title: t("n_crit"), subtitle: t("n_critS"), isOn: Binding(get: { store.criticalAlerts && notifOn }, set: { store.setCritical($0) }),
@@ -357,7 +359,9 @@ struct FAQView: View {
   var body: some View {
     ScrollView {
       VStack(spacing: 10) {
-        InfoCard(symbol: "questionmark.circle", title: t("faqQ1"), text: t("faqA1"))
+        if Capabilities.criticalAlerts {  // "Ring when silenced" needs Apple's entitlement
+          InfoCard(symbol: "questionmark.circle", title: t("faqQ1"), text: t("faqA1"))
+        }
         InfoCard(symbol: "questionmark.circle", title: t("faqQ2"), text: t("faqA2"))
         InfoCard(symbol: "questionmark.circle", title: t("faqQ3"), text: t("faqA3"))
         Grp {
@@ -423,7 +427,7 @@ struct LinkOptions: View {
   private func mail() {
     var c = URLComponents(string: "mailto:")!
     c.queryItems = [
-      URLQueryItem(name: "subject", value: "BRB for Mac"), URLQueryItem(name: "body", value: AppLinks.macDownload.absoluteString),
+      URLQueryItem(name: "subject", value: "Back in 5 for Mac"), URLQueryItem(name: "body", value: AppLinks.macDownload.absoluteString),
     ]
     if let url = c.url { UIApplication.shared.open(url) }
     sent = "mail"

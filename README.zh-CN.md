@@ -1,22 +1,22 @@
-# BRB
+# Back in 5
 
-**Be right back，马上回来。** 去买杯咖啡、接个电话、上个洗手间，MacBook 就放在桌上，BRB 替你看着，等你回来。
+**Back in 5，去去就回。** 去买杯咖啡、接个电话、上个洗手间，MacBook 就放在桌上，Back in 5 替你看着，等你回来。
 
-**[下载 BRB.dmg](https://github.com/samsara0xgg/BRB/releases/latest/download/BRB.dmg)** · [English](README.md)
+**[下载 Back-in-5.dmg](https://github.com/samsara0xgg/BRB/releases/latest/download/Back-in-5.dmg)** · [English](README.md)
 
-BRB 是把 MacBook 留在图书馆或咖啡馆桌上时用的菜单栏小工具。警戒时每块屏幕都变成磨砂玻璃，上面只有一句话：请勿触碰。路过不会被录下；一旦有人碰它，屏幕从被碰的地方泛红、锁屏、报警，存下碰之前 10 秒和之后的画面，并通知你的手机。
+Back in 5 是把 MacBook 留在图书馆或咖啡馆桌上时用的菜单栏小工具。警戒时每块屏幕都变成磨砂玻璃，上面只有一句话：请勿触碰。路过不会被录下；一旦有人碰它，屏幕从被碰的地方泛红、锁屏、报警，存下碰之前 10 秒和之后的画面，并通知你的手机。
 
 需要 Apple 芯片的 MacBook，macOS 14 或更新。在 macOS 26 上提示牌是液态玻璃（Liquid Glass）。
 
 ## 安装
 
-[下载 BRB.dmg](https://github.com/samsara0xgg/BRB/releases/latest/download/BRB.dmg)，打开后把 **BRB** 拖进 **应用程序**，再从那里打开。需要 Apple 芯片的 MacBook，macOS 14 或更新。菜单栏会出现一个盾牌，BRB 会把自己加进登录项，面板会自己打开：
+[下载 Back-in-5.dmg](https://github.com/samsara0xgg/BRB/releases/latest/download/Back-in-5.dmg)，打开后把 **Back in 5** 拖进 **应用程序**，再从那里打开。需要 Apple 芯片的 MacBook，macOS 14 或更新。菜单栏会出现一个盾牌，Back in 5 会把自己加进登录项，面板会自己打开：
 
 1. **三张卡片**，讲清它做什么、录什么、怎么停下。
 2. **静音试一次。** 过程中会请你允许辅助功能（用来发现键盘和触控板被碰）和摄像头；还缺什么，面板会列出来，每一项都有修复按钮。合上盖子也不睡眠需要一条管理员规则，输一次密码就装好。
 3. **等屏幕变成磨砂后碰一下触控板**：屏幕会像陌生人碰到时那样泛红并锁屏，只是不出声。解锁或把手指放在触控 ID 上就能停下。测试模式用完会自动关闭。
 
-面板底部的 **使用说明** 可以再看一遍卡片。想删掉 BRB：在面板里退出，把它拖进废纸篓，再运行 `sudo rm /etc/sudoers.d/brb` 删掉那条规则。录像留在 `~/Movies/BRB/`，日志在 `~/Library/Logs/brb.log`。
+面板底部的 **使用说明** 可以再看一遍卡片。想删掉 Back in 5：在面板里退出，把它拖进废纸篓，再运行 `sudo rm /etc/sudoers.d/brb` 删掉那条规则。录像留在 `~/Movies/Back in 5/`，日志在 `~/Library/Logs/brb.log`。
 
 ### 从源码安装
 
@@ -24,7 +24,7 @@ BRB 是把 MacBook 留在图书馆或咖啡馆桌上时用的菜单栏小工具�
 
 ```sh
 git clone https://github.com/samsara0xgg/BRB.git
-cd BRB
+cd Back in 5
 ./install.sh
 ```
 
@@ -53,22 +53,22 @@ cd BRB
 ## 隐私
 
 - 从倒计时开始，摄像头只在内存里保留最近 10 秒。没人碰，就什么都不会写到硬盘上。
-- 一旦触发，这 10 秒和之后的画面存到 `~/Movies/BRB/`（保留 7 天，最多 20 GB）。
+- 一旦触发，这 10 秒和之后的画面存到 `~/Movies/Back in 5/`（保留 7 天，最多 20 GB）。
 - 录像、照片和手机页面里，除了离镜头最近的那张脸，其他人脸都会打码：碰电脑的人看得清，后面路过的人看不清。
 - 手机页面只在报警之后才有画面。
 
 ## 手机
 
-- **提醒**（可选）通过 [ntfy](https://ntfy.sh) 推送。在面板里打开，用 ntfy App 扫码订阅，发一条测试。报警时推送发生了什么和一张照片，解除后再推一条。订阅名是唯一的钥匙，ntfy.sh 上的照片保留 3 小时。
-- **手机页面** 的链接和二维码在面板里。报警前只显示电脑有没有在警戒；报警后能看实时画面、最多 6 张照片（保留 7 天）和经过。页面只能看，不能控制电脑。报警推送里的链接只在这次报警解除前有效（因为 ntfy 会保存消息）；面板里的链接一直有效。面板里的 **重置链接** 会让旧链接立刻失效，并清掉中继上存的东西。
+- **提醒** 发到 iPhone 版（见下文）：报警时推送发生了什么和一张照片，解除后再推一条。
+- **手机页面** 的链接和二维码在面板里。报警前只显示电脑有没有在警戒；报警后能看实时画面、最多 3 张照片（保留 7 天）和经过。页面只能看，不能控制电脑。报警推送里的链接只在这次报警解除前有效；面板里的链接一直有效。面板里的 **重置链接** 会让旧链接立刻失效，并清掉中继上存的东西。
 
-页面跑在 `relay/` 里的中继上，是一个 Cloudflare Worker，默认用作者部署的那个。想用自己的：运行 `cd relay && npx wrangler deploy`，再运行 `defaults write com.allen.guard-mode relayHost <你的-worker>.workers.dev`，然后重启 BRB。还可以在 Worker 上设置 `CAM_IDS`，只允许列出的房间号连接（面板里手机链接 `/v/` 后面那串）。
+页面跑在 `relay/` 里的中继上，是一个 Cloudflare Worker，默认用作者部署的那个。想用自己的：先删掉 `relay/wrangler.jsonc` 里的 `routes`（那是作者的域名），运行 `cd relay && npx wrangler deploy`，再运行 `defaults write com.allen.brb.mac relayHost <你的-worker>.workers.dev`，然后重启 Back in 5。还可以在 Worker 上设置 `CAM_IDS`，只允许列出的房间号连接（面板里手机链接 `/v/` 后面那串）。
 
 **iPhone App** 在「设置 → 手机 → **配对 iPhone…**」里和这台 Mac 配对：扫码，或输入那六位数字。配对后可以在 App 里关掉警笛、解除警戒、远程开始或停止警戒，并查看历史记录。这需要中继 v3，所以请再运行一次 `npx wrangler deploy`。给 App 的推送是可选的，需要把你的 Apple 推送密钥放进 Worker 的密钥（`npx wrangler secret put APNS_KEY`，再设置 `APNS_KEY_ID`、`APNS_TEAM_ID` 和 `APNS_TOPIC`）；没有它们，App 开着时仍然可以用。协议写在 `relay/PROTOCOL.md` 里；`cd relay && npm ci && npm test` 会跑中继的测试。
 
 ## 命令
 
-`build/BRB.app/Contents/MacOS/brb <命令>`：
+`"build/Back in 5.app/Contents/MacOS/brb" <命令>`：
 
 | 命令 | 作用 | 声音 |
 |---|---|---|
@@ -78,7 +78,7 @@ cd BRB
 | `camera [秒]` | 像警戒时一样缓存画面，中途像触发一样开始保存 | 无声 |
 | `record [秒]` | 把原始加速度和开合角度输出成 CSV，方便离线调参 | 无声 |
 | `siren [秒]` | 先响提示音，再响警笛，最后恢复音量 | 很响 |
-| `live [秒]` | 打开摄像头并允许实时画面，连上中继，打印机主链接（用 `open -n -W build/BRB.app --args live 60` 才有摄像头权限） | 无声 |
+| `live [秒]` | 打开摄像头并允许实时画面，连上中继，打印机主链接（用 `open -n -W "build/Back in 5.app" --args live 60` 才有摄像头权限） | 无声 |
 | `push` | 和面板里一样的测试推送，带照片 | 电脑上无声 |
 | `snapshot <阶段> [png]` | 显示 `countdown`、`armed`、`test`、`alarm`、`welcome` 各阶段的磨砂屏幕，或 `panel` / `notready` 面板，持续 3.5 秒；加 `-AppleLanguages "(zh-Hans)"` 看中文 | 无声 |
 
@@ -90,7 +90,7 @@ cd BRB
 
 ## 开发
 
-`./build.sh` 构建 `build/BRB.app`；`SIGN_IDENTITY=-` 用临时签名。CI（`.github/workflows/build.yml`，macOS 26）会构建、检查 plist 和文案、跑 `selftest --no-hardware`、检查中继语法；只在 PR 和 `main` 上跑。它还会从下载的源码副本安装一遍，并用临时签名打出磁盘映像、从 `/Applications` 运行 BRB。
+`./build.sh` 构建 `build/Back in 5.app`；`SIGN_IDENTITY=-` 用临时签名。CI（`.github/workflows/build.yml`，macOS 26）会构建、检查 plist 和文案、跑 `selftest --no-hardware`、检查中继语法；只在 PR 和 `main` 上跑。它还会从下载的源码副本安装一遍，并用临时签名打出磁盘映像、从 `/Applications` 运行 Back in 5。
 
 `scripts/release.sh` 发布下载版：用你的 Developer ID 和强化运行时签名，给 App 和磁盘映像做公证，再按 `Info.plist` 里的版本号建 GitHub Release。需要证书、notarytool 钥匙串配置（`NOTARY_PROFILE`）和 GitHub CLI；先把 `CFBundleShortVersionString` 和 `CFBundleVersion` 调高。
 
@@ -122,7 +122,7 @@ cd BRB
 
 ## 紧急停止
 
-`kill -9` 会让 App 重启并继续报警。`bootout` 发送 SIGTERM，会解除警戒：恢复音量、让电脑能正常睡眠，并且不再启动：
+`kill -9` 会让 App 重启并继续报警（install.sh 装的由系统重启，「应用程序」里那份由 Back in 5 自带的一个小守护进程重启）。`bootout` 发送 SIGTERM，会解除警戒：恢复音量、让电脑能正常睡眠，并且不再启动：
 
 ```sh
 launchctl bootout gui/$(id -u)/com.allen.guard-mode
