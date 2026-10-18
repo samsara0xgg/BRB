@@ -15,7 +15,7 @@ BRB is an alert tool. It is not insurance or a security service. It can:
 
 - miss an event (for example when a sensor sends no data, the camera is covered, the Mac is shut or powered off quickly, or the chosen place is not sensitive enough);
 - raise a false alarm (for example when a friend or a waiter touches it);
-- deliver alerts late or not at all (network, Apple's push service, ntfy.sh or the relay failing);
+- deliver alerts late or not at all (network, Apple's push service or the relay failing);
 - miss a face when pixelating.
 
 BRB is provided "as is" and "as available". To the fullest extent the law allows, we give no warranties, express or implied, including merchantability, fitness for a particular purpose and non-infringement, and we do not promise that BRB will prevent theft, recover a device, or capture photos good enough to identify anyone. If your Mac is stolen, call the police.

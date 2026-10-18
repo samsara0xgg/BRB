@@ -26,7 +26,7 @@ Contact: {{email}}
 | Alarm recording: the 10 s before the touch and everything until disarm; video only, no sound | Evidence for you | `~/Movies/BRB/` | 7 days and 20 GB in total, oldest first (cleaned when the app starts and when guarding starts); delete any time |
 | Session records: start and end, trigger, how it was disarmed, ignored bumps, siren time, photo count, recording file name, test or not | The panel's Recent list and the welcome-back summary | `~/Library/Application Support/BRB/` | The last 30 |
 | Log: events, errors, the input type or key code that set off an alarm, the paired phone's name | Troubleshooting | `~/Library/Logs/brb.log` | Cut to the last 1 MB once it passes 10 MB; delete any time |
-| Settings and secrets: screen note, place, volume, ntfy topic, relay key and access token, paired phone's name | Making the app work | App preferences (`com.allen.guard-mode`) | Until you reset the link or delete the app |
+| Settings and secrets: screen note, place, volume, relay key and access token, paired phone's name | Making the app work | App preferences (`com.allen.brb.mac`) | Until you reset the link or delete the app |
 | Keyboard, trackpad, motion sensor, lid angle, charger | Detecting a touch in real time | Processed in memory | Not stored or sent (the log notes only what kind of input set off an alarm) |
 | Touch ID | Disarming | Handled by macOS | We never get fingerprints, only "passed" or "failed" |
 
@@ -36,7 +36,7 @@ Contact: {{email}}
 
 | Data | Purpose | Where | How long |
 |---|---|---|---|
-| Mac state: guarding phase and times, place, screen note, siren volume, test mode, whether the camera and ntfy alerts are on, trigger and alarm stage, bumps, the last 40 events | Shown on the phone page and in the iPhone app; decides which pushes to send | Relay | Only the latest copy, replaced on every change; until you reset the link |
+| Mac state: guarding phase and times, place, screen note, siren volume, test mode, whether the camera is on, trigger and alarm stage, bumps, the last 40 events | Shown on the phone page and in the iPhone app; decides which pushes to send | Relay | Only the latest copy, replaced on every change; until you reset the link |
 | With an iPhone paired, also: computer name (e.g. "Allen's MacBook Pro"), model, battery level, charging, four self-checks | Showing this Mac on the iPhone | Relay | Same as above |
 | Alarm photos: currently up to 3 JPEGs per alarm (the relay keeps at most 6 per alarm), bystanders pixelated | Seeing what happened, on your phone | Relay | 7 days; delete earlier any time |
 | Live frames: about 8 a second, bystanders pixelated | Watching live during an alarm | Passed through, not stored | Sent only during an alarm, and only while someone allowed is watching |
@@ -95,15 +95,12 @@ Alarm photos and recordings can show faces, which many laws treat as sensitive. 
 |---|---|---|---|---|---|
 | Cloudflare, Inc. | Processor, hosts the relay | All relay data in sections 3.2 and 3.3, and the IP addresses needed to deliver it | Running the relay | US company, global network, outside mainland China | https://www.cloudflare.com/privacypolicy/ |
 | Apple Inc. (Apple Push Notification service) | Push channel | Push tokens; push content: alert type, computer name, room ID, alarm pass, photo time, time of day; Live Activity content: place, times, trigger, bumps | Notifications and Live Activity updates | US, outside mainland China | https://www.apple.com/legal/privacy/ |
-| ntfy.sh (optional) | Third-party public push service | Only if you turn on "Phone alerts" on the Mac: alarm title and time, siren status, a link with the alarm pass, alarm photos, the disarm notice; "send a test" attaches a camera photo | Pushing to the ntfy app on your phone | Outside mainland China | https://docs.ntfy.sh/privacy/ |
-
-About ntfy: the topic name is the only secret; anyone who knows it can read the messages. ntfy.sh keeps an attached photo for 3 hours.
 
 We share personal data with no one else, except where the law requires it.
 
 ## 7. International transfers (separate consent)
 
-The relay (Cloudflare), Apple's push service and ntfy.sh are all outside mainland China. Whenever you guard, the Mac sends the data in section 3.2 to the relay; with an iPhone paired, the data in section 3.3 and pushes follow.
+The relay (Cloudflare) and Apple's push service are outside mainland China. Whenever you guard, the Mac sends the data in section 3.2 to the relay; with an iPhone paired, the data in section 3.3 and pushes follow.
 
 - Names and contacts of the overseas recipients: section 6.
 - Purpose and method: running the relay and sending alerts, always over HTTPS or WSS.
@@ -123,7 +120,6 @@ You can do most of this yourself:
 - **Delete everything the relay holds for this Mac**: "Reset link…" in the Mac's panel, or Mac Settings → Phone → "Unpair all phones…", or "Reset link" on this Mac's page in the iPhone app (the Mac must come online within 10 minutes). The old link stops working, every phone is unpaired, and the relay deletes photos, history, state and device registrations. It keeps only a "reset" marker so the old link can say it was reset.
 - **Unpair one iPhone**: removes this phone's registration on the relay and the pairing on the phone. The Mac's photos and history stay.
 - **Data on the Mac**: delete the recordings in `~/Movies/BRB/`, `~/Library/Logs/brb.log` and `~/Library/Application Support/BRB/`.
-- **Stop ntfy alerts**: turn off "Phone alerts" in the Mac's panel. Messages ntfy.sh already has expire under its own rules.
 - **Data on the iPhone**: delete the app.
 
 Or email {{email}}. There are no accounts, so include the room ID (the part of the phone-page link after `/v/`) so we can find the data. We reply within 15 working days. Resetting the link yourself is still the fastest way.
@@ -131,7 +127,7 @@ Or email {{email}}. There are no accounts, so include the room ID (the part of t
 ## 9. Security
 
 - Everything travels over HTTPS or WSS (TLS).
-- Random secrets: a 32-character Mac key, a 24-character owner token, a 16-character pass per alarm, a 20-character ntfy topic. The room ID is a hash of the Mac key, so knowing it does not let anyone pose as your Mac.
+- Random secrets: a 32-character Mac key, a 24-character owner token, a 16-character pass per alarm. The room ID is a hash of the Mac key, so knowing it does not let anyone pose as your Mac.
 - Pairing codes last 10 minutes and work once; 8 tries per IP address per 10 minutes; comparisons leak no timing.
 - Only the owner token can send commands. By default the iPhone asks for Face ID before disarming or stopping.
 - The relay keeps only the fields in its protocol, with limits on length and count. Live frames are never written to disk.
@@ -144,7 +140,7 @@ BRB is not directed at children under 14 (under 13 elsewhere, or a higher age wh
 
 ## 11. Running your own relay
 
-You can deploy your own relay and point the Mac at it with `defaults write com.allen.guard-mode relayHost <your-host>` (see the project README). The data in sections 3.2 and 3.3 then goes only to your server, not to us, and you are responsible for running it lawfully. The iPhone uses the relay address in the pairing QR code.
+You can deploy your own relay and point the Mac at it with `defaults write com.allen.brb.mac relayHost <your-host>` (see the project README). The data in sections 3.2 and 3.3 then goes only to your server, not to us, and you are responsible for running it lawfully. The iPhone uses the relay address in the pairing QR code.
 
 ## 12. What we don't do
 
@@ -154,7 +150,7 @@ No ads, no analytics, no tracking across apps, no selling or renting data, no pr
 
 - Contract: providing the features you use (guarding, pushes, phone view, history).
 - Legitimate interests: security and abuse prevention (such as logging IPs of wrong pairing codes); keeping photos of other people from an alarm as evidence for you.
-- Consent: optional ntfy alerts, notification permission, and international transfers where the law requires consent.
+- Consent: notification permission, and international transfers where the law requires consent.
 
 ## 14. Changes
 
