@@ -58,6 +58,6 @@ xcrun stapler staple "$dmg"
 # The asset keeps its name, so releases/latest/download/Back-in-5.dmg always points at the newest. A copy
 # named BRB.dmg, the name until 1.1, keeps the links from before working.
 cp "$dmg" dist/BRB.dmg
-gh release create "v$VERSION" "$dmg" dist/BRB.dmg --title "Back in 5 $VERSION" \
+gh release create "v$VERSION" "$dmg" dist/BRB.dmg --title "Back in 5 v$VERSION" \
   --notes "Download Back-in-5.dmg, open it and drag Back in 5 into Applications. Apple silicon, macOS 14 or later."
-echo "published Back in 5 $VERSION: https://github.com/samsara0xgg/BRB/releases/latest/download/Back-in-5.dmg"
+echo "published Back in 5 v$VERSION: https://github.com/samsara0xgg/BRB/releases/latest/download/Back-in-5.dmg"

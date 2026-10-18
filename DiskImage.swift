@@ -58,7 +58,7 @@ enum DiskImage {
     rgb(0xF0A53A).setStroke()
     arrow.stroke()
 
-    text("Be right back.  Apple silicon · macOS 14 or later", size: 11, weight: .regular, color: rgb(0x8A91A0), top: 356)
+    text("Apple silicon · macOS 14 or later", size: 11, weight: .regular, color: rgb(0x8A91A0), top: 356)
     return rep.representation(using: .png, properties: [:])
   }
 }

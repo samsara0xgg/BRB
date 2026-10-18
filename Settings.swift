@@ -233,7 +233,7 @@ private struct GeneralPane: View {
             .controlSize(.small)
         }
       }
-      Text(verbatim: "Back in 5 \(version)")
+      Text(verbatim: "Back in 5 · \(version)")
         .font(Theme.label)
         .foregroundStyle(.tertiary)
         .frame(maxWidth: .infinity)
