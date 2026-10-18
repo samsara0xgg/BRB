@@ -71,3 +71,41 @@ jobs:
           cat ~/Library/Logs/brb.log
           grep -q "login items" ~/Library/Logs/brb.log
           pkill -TERM -x brb
+
+  # The iPhone app, its widgets and notification extension, and the Apple Watch app. No signing: this
+  # only proves it compiles and its tests pass. The project is generated from ios/project.yml.
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks
+          xcrun simctl list devices available | head -40
+      - name: Check the strings
+        run: |
+          plutil -lint ios/Resources/*.lproj/*.strings ios/Resources/*.lproj/*.stringsdict
+          python3 ios/scripts/check-strings.py
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate the project
+        working-directory: ios
+        run: xcodegen
+      - name: Build the app, widgets, notification extension and Watch app
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project BRB.xcodeproj -scheme BRB -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build 2>&1 \
+            | tee "$RUNNER_TEMP/build.log" | grep -E "error:|warning: |BUILD (SUCCEEDED|FAILED)" | sort -u | head -150
+      - name: Unit tests
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -project BRB.xcodeproj -scheme BRB -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro' CODE_SIGNING_ALLOWED=NO test 2>&1 \
+            | tee "$RUNNER_TEMP/test.log" | grep -E "error:|Test Case .* (passed|failed)|Executed [0-9]+ tests|TEST (SUCCEEDED|FAILED)" | head -80

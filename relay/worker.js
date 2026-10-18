@@ -1,42 +1,76 @@
 import { DurableObject } from "cloudflare:workers";
+import * as apns from "./apns.js";
 
 // One Room per Mac. The Mac connects to /cam/<key>; phones open /v/<id>#<token> and watch
 // /watch/<id>?t=<token>, where id = the first 32 hex chars of sha256(key). The id alone shows only
 // whether the Mac is guarded. The owner's token (from the Mac's panel) shows everything; the pass in
 // an alarm push shows that alarm until it is disarmed. The Mac sends camera frames only after a
-// trigger and only while an allowed page is watching; photos of an alarm are kept for 30 days.
+// trigger and only while an allowed page is watching; photos of an alarm are kept for 7 days (30 for
+// an owner with BRB Pro).
 //
-// Protocol v2, Mac to relay: {"hello":{"token":…,"v":2}} once per connection, then {"state":{…}} on
-// every change, JPEG frames as binary messages, and photos as POST /photo/<key>?t=<ms>&pass=<pass>.
-// A Mac from before v2 never says hello: its room lets every page watch, as before.
+// relay/PROTOCOL.md is the contract. In short, protocol v3, Mac to relay: {"hello":{"token":…,"v":3}}
+// once per connection, then {"state":{…}} on every change, {"session":{…}} when a session ends,
+// {"ack":{…}} for each command, JPEG frames as binary messages, and photos as
+// POST /photo/<key>?t=<ms>&pass=<pass>. The owner's phone sends commands (POST /cmd/<id> or a {"cmd"}
+// frame), which the Mac gets as {"cmd":{…},"from":"phone"}; the relay queues them while it is offline.
+// A phone pairs with a code the Mac asked for (POST /pair/<key>, POST /claim), which the global Codes
+// object keeps. A Mac from before v3 keeps working, and one from before v2 never says hello: its room
+// lets every page watch, as before.
 //
-// Optional: CAM_IDS, a comma-separated list of the room ids allowed to connect as a camera.
+// Optional: CAM_IDS, a comma-separated list of the room ids allowed to connect as a camera; APNS_KEY,
+// APNS_KEY_ID, APNS_TEAM_ID and APNS_TOPIC (secrets) to push to the iPhone app.
 
 const TOKEN = /^[a-z0-9]{8,64}$/;
+const DEVICE = /^[A-Za-z0-9-]{8,64}$/;
+const SESSION = /^[A-Za-z0-9_-]{1,24}$/;
+const HEX = /^[0-9a-fA-F]{16,400}$/;
 const MAX_FRAME = 200_000;
 const MAX_PHOTO = 300_000;
-const PHOTOS_KEPT = 6;
-const PHOTO_DAYS = 30;
+const PHOTOS_PER_ALARM = 6;
+const SESSIONS_KEPT = 30;
+const QUEUE_KEPT = 8;
+const DEVICES_KEPT = 6;
+const DAY = 86400_000;
+const PLACES = ["library", "cafe", "transit"];
+const STAGES = ["soft", "siren", "back", "hushed"];
+const KINDS = ["start", "stop", "hush", "disarm", "set", "reset"];
+const BY_KEY = new Set(["cam", "photo", "wipe", "pair"]);
+const METHODS = {
+  cam: "GET", watch: "GET", p: "GET", state: "GET", photo: "POST", wipe: "POST", pair: "POST", cmd: "POST", "test-push": "POST",
+  h: "GET DELETE", device: "POST DELETE",
+};
+const CORS = { "access-control-allow-origin": "*" };
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const [, route, a, b] = url.pathname.split("/");
+    if (route === "claim") return claim(request, env, url);
     if (!TOKEN.test(a ?? "")) return text("not found", 404);
-    if (route === "v" && request.method === "GET") {
-      return new Response(PAGE, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer" } });
-    }
-    const byKey = { cam: true, photo: true, wipe: true }[route];
-    const byId = { watch: true, p: true }[route];
-    if (!byKey && !byId) return text("not found", 404);
+    if (route === "v" && request.method === "GET") return html(PAGE);
+    if (route === "pair" && request.method === "GET") return html(PAIR_PAGE);
+    if (!Object.hasOwn(METHODS, route)) return text("not found", 404);
+    if (route === "state" && request.method === "OPTIONS") return new Response(null, { status: 204, headers: { ...CORS, "access-control-allow-methods": "GET" } });
+    const byKey = BY_KEY.has(route);
     const id = byKey ? await viewId(a) : a;
-    if ((route === "cam" || route === "photo") && env.CAM_IDS && !env.CAM_IDS.split(",").map((s) => s.trim()).includes(id)) {
+    if ((route === "cam" || route === "photo" || route === "pair") && env.CAM_IDS && !env.CAM_IDS.split(",").map((s) => s.trim()).includes(id)) {
       return text("this camera is not allowed here", 403);
     }
     if ((route === "cam" || route === "watch") && request.headers.get("Upgrade") !== "websocket") return text("websocket only", 426);
-    if ((route === "photo" || route === "wipe") && request.method !== "POST") return text("POST only", 405);
+    if (!METHODS[route].split(" ").includes(request.method)) {
+      return text(`${METHODS[route].split(" ").join(" or ")} only`, 405);
+    }
     if (route === "p" && !/^\d{10,16}$/.test(b ?? "")) return text("not found", 404);
-    return env.ROOMS.get(env.ROOMS.idFromName(id)).fetch(request);
+    if (route === "device" && request.method === "DELETE" && !DEVICE.test(b ?? "")) return text("not found", 404);
+    if (route === "h" && b !== undefined && !SESSION.test(b)) return text("not found", 404);
+    if (route === "pair") return offer(request, env, id);
+    const room = env.ROOMS.get(env.ROOMS.idFromName(id));
+    if (route === "wipe") {
+      const response = await room.fetch(request);
+      await codes(env).forget(id);  // an offer made before the reset must not pair a phone with the new, empty room
+      return response;
+    }
+    return room.fetch(request);
   },
 };
 
@@ -44,43 +78,232 @@ function text(body, status) {
   return new Response(body, { status, headers: { "content-type": "text/plain; charset=utf-8" } });
 }
 
+function json(body, status = 200, headers = {}) {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers } });
+}
+
+function html(page) {
+  return new Response(page, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer" } });
+}
+
+async function readJson(request, max = 4096) {
+  const raw = await request.text();
+  if (raw.length > max) return null;
+  try {
+    const value = JSON.parse(raw);
+    return value && typeof value === "object" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 async function viewId(key) {
   const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key)));
   return [...hash].map((x) => x.toString(16).padStart(2, "0")).join("").slice(0, 32);
 }
 
+/// A number from the environment (a var or a secret is always a string), or `fallback`.
+function knob(value, fallback) {
+  return value !== undefined && value !== "" && Number.isFinite(Number(value)) ? Number(value) : fallback;
+}
+
+const isToken = (v) => typeof v === "string" && TOKEN.test(v);
+const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
+const num = (v) => (Number.isFinite(v) ? v : 0);
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+/// Equal strings, in a time that depends only on their length.
+function same(a, b) {
+  const x = String(a), y = String(b);
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x.charCodeAt(i) || 0) ^ (y.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
+// MARK: pairing
+
+const codes = (env) => env.CODES.get(env.CODES.idFromName("all"));
+
+/// POST /pair/<key>: the Mac, which proves it holds the key, asks for a code to show.
+async function offer(request, env, id) {
+  const body = await readJson(request);
+  if (!body || !isToken(body.token)) return json({ error: "bad request" }, 400);
+  const room = env.ROOMS.get(env.ROOMS.idFromName(id));
+  // The room learns the owner's token now, so a phone that claims before the Mac ever connects is let in.
+  if (!(await room.adopt(body.token))) return json({ error: "reset" }, 410);
+  return json(await codes(env).offer(id, body.token, str(body.name, 40), str(body.model, 40)));
+}
+
+/// POST /claim: a phone with the digits (or the QR's string) gets the room, once.
+async function claim(request, env, url) {
+  if (request.method !== "POST") return text("POST only", 405);
+  const body = await readJson(request);
+  if (!body || typeof body.code !== "string") return json({ error: "bad request" }, 400);
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const device = str(body.device, 40) || "iPhone";
+  const r = await codes(env).claim(body.code, ip);
+  if (!r.ok) return json({ error: r.error }, r.status, r.retry ? { "retry-after": String(r.retry) } : {});
+  try {
+    await env.ROOMS.get(env.ROOMS.idFromName(r.id)).notifyPaired(device, Date.now());
+  } catch (e) {
+    console.log("paired notice not delivered", String(e));  // the phone has what it needs; the Mac learns at its next hello
+  }
+  return json({ id: r.id, token: r.token, name: r.name, model: r.model, host: url.host });
+}
+
+/// Every pairing offer and every wrong guess, for the whole relay: one object, because a code is
+/// looked up without knowing the Mac. Offers live 10 minutes and are kept an hour longer, to tell a
+/// late phone "expired" instead of "invalid". TTL, tries and window can be set (PAIR_TTL_MS,
+/// PAIR_TRIES, PAIR_WINDOW_MS) so tests need not wait.
+export class Codes extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    const sql = ctx.storage.sql;
+    sql.exec("CREATE TABLE IF NOT EXISTS offers (code TEXT PRIMARY KEY, qr TEXT NOT NULL, room TEXT NOT NULL, token TEXT NOT NULL, name TEXT NOT NULL, model TEXT NOT NULL, expires INTEGER NOT NULL)");
+    sql.exec("CREATE TABLE IF NOT EXISTS tries (ip TEXT NOT NULL, t INTEGER NOT NULL)");
+  }
+
+  /// A new offer for a room replaces its old one.
+  offer(room, token, name, model) {
+    const sql = this.ctx.storage.sql;
+    const now = Date.now();
+    const expires = now + knob(this.env.PAIR_TTL_MS, 600_000);
+    sql.exec("DELETE FROM offers WHERE room = ? OR expires < ?", room, now - 3600_000);
+    let code, qr;
+    do code = randomString("0123456789", 6);
+    while (sql.exec("SELECT 1 FROM offers WHERE code = ?", code).toArray().length);
+    do qr = randomString("abcdefghijkmnpqrstuvwxyz23456789", 16);
+    while (sql.exec("SELECT 1 FROM offers WHERE qr = ?", qr).toArray().length);
+    sql.exec("INSERT INTO offers (code, qr, room, token, name, model, expires) VALUES (?, ?, ?, ?, ?, ?, ?)", code, qr, room, token, name, model, expires);
+    return { code, qr, expires };
+  }
+
+  claim(input, ip) {
+    const sql = this.ctx.storage.sql;
+    const now = Date.now();
+    const window = knob(this.env.PAIR_WINDOW_MS, 600_000);
+    // A /64 is one household on IPv6, as an address is on IPv4.
+    const who = ip.includes(":") ? ip.split(":").slice(0, 4).join(":") : ip;
+    sql.exec("DELETE FROM tries WHERE t < ?", now - window);
+    const recent = sql.exec("SELECT COUNT(*) AS n, MIN(t) AS first FROM tries WHERE ip = ?", who).one();
+    if (recent.n >= knob(this.env.PAIR_TRIES, 8)) {
+      return { ok: false, status: 429, error: "slow down", retry: Math.max(1, Math.ceil((recent.first + window - now) / 1000)) };
+    }
+    const wanted = input.trim().replace(/\s+/g, "").toLowerCase();
+    // Against every offer, without stopping at a match, so the time says nothing about the digits.
+    let hit = null;
+    for (const o of sql.exec("SELECT * FROM offers").toArray()) {
+      if (same(o.code, wanted) | same(o.qr, wanted)) hit = o;
+    }
+    if (!hit || hit.expires < now) {
+      sql.exec("INSERT INTO tries (ip, t) VALUES (?, ?)", who, now);
+      return hit ? { ok: false, status: 410, error: "expired" } : { ok: false, status: 404, error: "invalid" };
+    }
+    sql.exec("DELETE FROM offers WHERE code = ?", hit.code);
+    return { ok: true, id: hit.room, token: hit.token, name: hit.name, model: hit.model };
+  }
+
+  forget(room) {
+    this.ctx.storage.sql.exec("DELETE FROM offers WHERE room = ?", room);
+  }
+}
+
+function randomString(alphabet, n) {
+  const limit = 256 - (256 % alphabet.length);  // no modulo bias
+  let out = "";
+  while (out.length < n) {
+    for (const byte of crypto.getRandomValues(new Uint8Array(n * 2))) {
+      if (byte < limit && out.length < n) out += alphabet[byte % alphabet.length];
+    }
+  }
+  return out;
+}
+
+// MARK: room
+
 export class Room extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
     ctx.blockConcurrencyWhile(async () => {
-      this.owner = (await ctx.storage.get("owner")) ?? null;
-      this.state = (await ctx.storage.get("state")) ?? null;
-      this.offlineAt = (await ctx.storage.get("offlineAt")) ?? null;
-      this.oldPasses = (await ctx.storage.get("oldPasses")) ?? [];
-      this.wiped = (await ctx.storage.get("wiped")) ?? false;
+      const stored = await ctx.storage.get(["id", "owner", "state", "offlineAt", "oldPasses", "wiped", "queue", "paired", "devices", "pro", "pending"]);
+      this.id = stored.get("id") ?? null;
+      this.owner = stored.get("owner") ?? null;
+      this.state = stored.get("state") ?? null;
+      this.offlineAt = stored.get("offlineAt") ?? null;
+      this.oldPasses = stored.get("oldPasses") ?? [];
+      this.wiped = stored.get("wiped") ?? false;
+      this.queue = stored.get("queue") ?? [];  // [{cmd, at}], for a Mac that is offline
+      this.notice = stored.get("paired") ?? null;  // {device, at}, for a Mac that is offline
+      this.devices = stored.get("devices") ?? [];
+      this.pro = stored.get("pro") ?? false;
+      this.pending = stored.get("pending") ?? null;  // {due, pass, items}: the alarm alert, waiting for a photo
     });
   }
 
   async fetch(request) {
     const url = new URL(request.url);
-    const route = url.pathname.split("/")[1];
-    if (route === "cam") return this.connectCam();
-    if (route === "watch") return this.connectViewer(url.searchParams.get("t") ?? "");
-    if (route === "photo") return this.storePhoto(request, url);
-    if (route === "p") return this.servePhoto(Number(url.pathname.split("/")[3]), url.searchParams.get("t") ?? "");
-    if (route === "wipe") return this.wipe();
+    const [, route, a, b] = url.pathname.split("/");
+    const t = url.searchParams.get("t") ?? "";
+    await this.learn(BY_KEY.has(route) ? await viewId(a) : a);
+    switch (route) {
+      case "cam": return this.connectCam();
+      case "watch": return this.connectViewer(t);
+      case "state": return this.snapshot(t);
+      case "photo": return this.storePhoto(request, url);
+      case "p": return this.servePhoto(Number(b), t);
+      case "wipe": return this.wipe();
+      case "cmd": return this.command(request, t);
+      case "h": return request.method === "DELETE" ? this.erase(t, b) : this.history(t);
+      case "device": return request.method === "DELETE" ? this.unregister(t, b) : this.register(request, t);
+      case "test-push": return this.testPush(t);
+    }
     return text("not found", 404);
+  }
+
+  /// The room's own id, which only the paths say; the pushes carry it.
+  async learn(id) {
+    if (this.id === id) return;
+    this.id = id;
+    await this.ctx.storage.put("id", id);
+  }
+
+  /// The Mac proves it holds the key by asking for a code; its token becomes the owner's.
+  async adopt(token) {
+    if (this.wiped) return false;
+    if (this.owner !== token) {
+      this.owner = token;
+      await this.ctx.storage.put("owner", token);
+      this.refresh();
+    }
+    return true;
+  }
+
+  /// A phone claimed a code: the Mac hears of it now, or at its next hello.
+  async notifyPaired(device, at) {
+    if (this.wiped) return;
+    const notice = { device, at };
+    const cams = this.ctx.getWebSockets("cam");
+    if (cams.length) {
+      try {
+        for (const cam of cams) cam.send(JSON.stringify({ paired: notice }));
+        return;
+      } catch {}
+    }
+    this.notice = notice;
+    await this.ctx.storage.put("paired", notice);
   }
 
   // MARK: sockets
 
-  connectCam() {
+  async connectCam() {
+    const wasOnline = this.ctx.getWebSockets("cam").length > 0;
     for (const old of this.ctx.getWebSockets("cam")) old.close(1000, "replaced");
     const [client, server] = Object.values(new WebSocketPair());
     this.ctx.acceptWebSocket(server, ["cam"]);
     this.offlineAt = null;
     this.ctx.storage.delete("offlineAt");
     this.refresh();
+    if (!wasOnline && this.state) await this.notify(this.state, this.state, { wasOnline: false });
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -93,9 +316,9 @@ export class Room extends DurableObject {
   }
 
   async webSocketMessage(ws, message) {
-    if (!this.ctx.getTags(ws).includes("cam")) return;  // pages only watch
+    if (!this.ctx.getTags(ws).includes("cam")) return this.fromViewer(ws, message);
     if (typeof message !== "string") {
-      if (message.byteLength > MAX_FRAME) return;
+      if (message.byteLength > MAX_FRAME || this.state?.phase !== "triggered") return;
       for (const viewer of this.ctx.getWebSockets("viewer")) {
         if (seesCamera(viewer.deserializeAttachment()?.level)) try { viewer.send(message); } catch {}
       }
@@ -104,10 +327,15 @@ export class Room extends DurableObject {
     if (message.length > MAX_FRAME) return;
     let msg;
     try { msg = JSON.parse(message); } catch { return; }
-    if (msg.hello && TOKEN.test(msg.hello.token ?? "") && msg.hello.token !== this.owner) {
-      this.owner = msg.hello.token;
-      await this.ctx.storage.put("owner", this.owner);
+    let greet = false;
+    if (msg.hello && isToken(msg.hello.token)) {
+      if (msg.hello.token !== this.owner) {
+        this.owner = msg.hello.token;
+        await this.ctx.storage.put("owner", this.owner);
+      }
+      greet = msg.hello.v >= 3;  // a Mac that does not know commands is not sent any
     }
+    let change = null;
     if (msg.state && typeof msg.state === "object") {
       const previous = this.state?.pass;
       const next = clean(msg.state);
@@ -115,10 +343,31 @@ export class Room extends DurableObject {
         this.oldPasses = [...this.oldPasses, previous].slice(-10);
         await this.ctx.storage.put("oldPasses", this.oldPasses);
       }
+      change = { prev: this.state, next };
       this.state = next;
       await this.ctx.storage.put("state", this.state);
     }
+    if (msg.session && typeof msg.session === "object") this.storeSession(msg.session);
+    if (msg.ack && typeof msg.ack === "object") {
+      this.tellOwners({ ack: { id: str(msg.ack.id, 24), ok: msg.ack.ok === true, ...(msg.ack.why ? { why: str(msg.ack.why, 24) } : {}) } });
+    }
+    if (greet) await this.greet(ws);
     this.refresh();
+    if (change) await this.notify(change.prev, change.next);
+  }
+
+  /// A phone's text frame: only `{"cmd": {...}}` means anything, and only from the owner.
+  async fromViewer(ws, message) {
+    if (typeof message !== "string" || message.length > 4096) return;
+    let msg;
+    try { msg = JSON.parse(message); } catch { return; }
+    if (!msg?.cmd || typeof msg.cmd !== "object") return;
+    const id = str(msg.cmd.id, 24);
+    const refuse = (why) => { try { ws.send(JSON.stringify({ ack: { id, ok: false, why } })); } catch {} };
+    if (!this.isOwner(ws.deserializeAttachment()?.t ?? "")) return refuse("forbidden");
+    const cmd = cleanCommand(msg.cmd);
+    if (!cmd) return refuse("bad-command");
+    await this.dispatch(cmd);
   }
 
   async webSocketClose(ws) {
@@ -133,6 +382,9 @@ export class Room extends DurableObject {
     if (this.ctx.getTags(ws).includes("cam") && this.ctx.getWebSockets("cam").every((w) => w === ws)) {
       this.offlineAt = Date.now();
       await this.ctx.storage.put("offlineAt", this.offlineAt);
+      this.refresh(ws);
+      if (this.state) await this.notify(this.state, this.state, { online: false, wasOnline: true });
+      return;
     }
     this.refresh(ws);
   }
@@ -146,6 +398,12 @@ export class Room extends DurableObject {
     if (t && this.state?.pass && t === this.state.pass && this.state.phase === "triggered") return "pass";
     if (t && this.oldPasses.includes(t)) return "expired";
     return "status";
+  }
+
+  /// Who may send commands, change devices and read the history. Unlike `level`, never a room that
+  /// has no owner yet.
+  isOwner(t) {
+    return !this.wiped && this.owner !== null && t !== "" && same(t, this.owner);
   }
 
   /// Tells each page what it may see, and the Mac how many pages may see the camera.
@@ -166,23 +424,114 @@ export class Room extends DurableObject {
 
   view(level, t, online, photos) {
     const s = this.state;
-    const base = { v: 2, level, online, offlineAt: this.offlineAt };
+    const base = { v: 3, level, online, offlineAt: this.offlineAt };
     if (level === "reset" || level === "expired") return base;
     if (level === "status") return { ...base, state: s ? { phase: s.phase === "idle" ? "idle" : "armed", since: s.since } : null };
     const { pass, ...visible } = s ?? {};
     const mine = level === "owner" ? photos : photos.filter((p) => p.pass === t);
-    return { ...base, state: s ? visible : null, photos: mine.map((p) => p.t) };
+    // An alarm's pass is for its photos and its story, not for the Mac's battery or settings.
+    const shown = level === "owner" ? visible : { ...visible, mac: null, health: null, lastEnd: null };
+    return { ...base, state: s ? shown : null, photos: mine.map((p) => p.t) };
+  }
+
+  /// GET /state: the first frame of /watch, for the widgets, the Watch and background refreshes. A
+  /// token that opens nothing is refused here (a socket shows it the status view instead).
+  snapshot(t) {
+    if (!this.owner && !this.state && !this.wiped) return json({ error: "not found" }, 404, CORS);
+    const level = this.level(t);
+    if (level === "status" && t) return json({ error: "forbidden" }, 403, CORS);
+    return json(this.view(level, t, this.ctx.getWebSockets("cam").length > 0, this.photoList()), 200, CORS);
+  }
+
+  /// Sends to every phone that is the owner's.
+  tellOwners(frame) {
+    const body = JSON.stringify(frame);
+    for (const viewer of this.ctx.getWebSockets("viewer")) {
+      if (this.isOwner(viewer.deserializeAttachment()?.t ?? "")) try { viewer.send(body); } catch {}
+    }
+  }
+
+  // MARK: commands
+
+  /// POST /cmd/<id>
+  async command(request, t) {
+    if (!this.isOwner(t)) return json({ error: "forbidden" }, 403);
+    const cmd = cleanCommand(await readJson(request));
+    if (!cmd) return json({ error: "bad command" }, 400);
+    return json({ ok: true, delivered: await this.dispatch(cmd) });
+  }
+
+  /// To the Mac if it is here, otherwise into the queue (8 at most, the oldest dropped).
+  async dispatch(cmd) {
+    const cams = this.ctx.getWebSockets("cam");
+    if (cams.length) {
+      try {
+        for (const cam of cams) cam.send(JSON.stringify({ cmd, from: "phone" }));
+        return true;
+      } catch {}
+    }
+    this.queue = [...this.queue, { cmd, at: Date.now() }].slice(-QUEUE_KEPT);
+    await this.ctx.storage.put("queue", this.queue);
+    return false;
+  }
+
+  /// A start is stale after 30 s: nobody wants a Mac that begins guarding when it wakes up an hour
+  /// later. The rest keep for 10 minutes.
+  ttl(kind) {
+    return kind === "start" ? knob(this.env.START_TTL_MS, 30_000) : knob(this.env.CMD_TTL_MS, 600_000);
+  }
+
+  /// The Mac said hello with v3: what waited for it is delivered, in order. The owner's phone is told
+  /// of each command that went stale.
+  async greet(ws) {
+    if (this.notice) {
+      try {
+        ws.send(JSON.stringify({ paired: this.notice }));
+        this.notice = null;
+        await this.ctx.storage.delete("paired");
+      } catch {}
+    }
+    if (!this.queue.length) return;
+    const queue = this.queue;
+    this.queue = [];
+    await this.ctx.storage.delete("queue");
+    const now = Date.now();
+    for (const { cmd, at } of queue) {
+      if (now - at > this.ttl(cmd.k)) {
+        this.tellOwners({ ack: { id: cmd.id, ok: false, why: "expired" } });
+        continue;
+      }
+      try { ws.send(JSON.stringify({ cmd, from: "phone" })); } catch {}
+    }
   }
 
   // MARK: photos
 
   table() {
-    this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS photos (t INTEGER PRIMARY KEY, pass TEXT, data BLOB)");
+    const sql = this.ctx.storage.sql;
+    sql.exec("CREATE TABLE IF NOT EXISTS photos (t INTEGER PRIMARY KEY, pass TEXT, data BLOB)");
+    sql.exec('CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, "end" INTEGER, json TEXT)');
   }
 
   photoList() {
     this.table();
     return this.ctx.storage.sql.exec("SELECT t, pass FROM photos ORDER BY t DESC").toArray();
+  }
+
+  latestPhoto(pass) {
+    if (!pass) return null;
+    this.table();
+    return this.ctx.storage.sql.exec("SELECT MAX(t) AS t FROM photos WHERE pass = ?", pass).one().t ?? null;
+  }
+
+  /// 7 days, or 30 when a registered device says it has Pro.
+  keepMs() {
+    return (this.pro ? 30 : 7) * DAY;
+  }
+
+  purge() {
+    this.table();
+    this.ctx.storage.sql.exec("DELETE FROM photos WHERE t < ?", Date.now() - this.keepMs());
   }
 
   async storePhoto(request, url) {
@@ -192,9 +541,19 @@ export class Room extends DurableObject {
     const data = await request.arrayBuffer();
     if (data.byteLength === 0 || data.byteLength > MAX_PHOTO) return text("photo too large", 413);
     this.table();
-    this.ctx.storage.sql.exec("INSERT OR REPLACE INTO photos (t, pass, data) VALUES (?, ?, ?)", t, TOKEN.test(pass) ? pass : "", data);
-    this.ctx.storage.sql.exec(`DELETE FROM photos WHERE t NOT IN (SELECT t FROM photos ORDER BY t DESC LIMIT ${PHOTOS_KEPT})`);
-    if (!(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(Date.now() + PHOTO_DAYS * 86400_000);
+    const kept = TOKEN.test(pass) ? pass : "";
+    const sql = this.ctx.storage.sql;
+    sql.exec("INSERT OR REPLACE INTO photos (t, pass, data) VALUES (?, ?, ?)", t, kept, data);
+    sql.exec("DELETE FROM photos WHERE pass = ? AND t NOT IN (SELECT t FROM photos WHERE pass = ? ORDER BY t DESC LIMIT ?)", kept, kept, PHOTOS_PER_ALARM);
+    this.purge();
+    if (this.pending && this.pending.pass === kept) {
+      await this.flush(t);
+    } else {
+      await this.reschedule();
+      if (kept && this.state?.phase === "triggered" && this.state.pass === kept) {
+        await this.notify(this.state, this.state, { force: true });  // the Live Activity learns of the photo
+      }
+    }
     this.refresh();
     return text("ok", 200);
   }
@@ -208,13 +567,155 @@ export class Room extends DurableObject {
     return new Response(row.data, { headers: { "content-type": "image/jpeg", "cache-control": "private, max-age=86400", "referrer-policy": "no-referrer" } });
   }
 
-  /// Photos older than 30 days go.
-  async alarm() {
+  /// The room's one alarm clock, set to the earlier of the next photo to expire and the alarm alert
+  /// that waits for a photo. A Durable Object alarm and not a setTimeout: it survives the object
+  /// being evicted or restarted in those 2.5 s, and a lost alarm alert is the one failure that matters.
+  async reschedule() {
     this.table();
-    this.ctx.storage.sql.exec("DELETE FROM photos WHERE t < ?", Date.now() - PHOTO_DAYS * 86400_000);
-    const oldest = this.ctx.storage.sql.exec("SELECT MIN(t) AS t FROM photos").toArray()[0]?.t;
-    if (oldest) await this.ctx.storage.setAlarm(oldest + PHOTO_DAYS * 86400_000);
+    const due = [];
+    if (this.pending) due.push(this.pending.due);
+    const oldest = this.ctx.storage.sql.exec("SELECT MIN(t) AS t FROM photos").one().t;
+    if (oldest) due.push(oldest + this.keepMs());
+    if (due.length) await this.ctx.storage.setAlarm(Math.min(...due));
+    else await this.ctx.storage.deleteAlarm();
+  }
+
+  /// Photos past their time go, and the alarm alert that waited long enough goes without one.
+  async alarm() {
+    if (this.pending && Date.now() >= this.pending.due - 25) await this.flush(this.latestPhoto(this.pending.pass));
+    this.purge();
+    await this.reschedule();
     this.refresh();
+  }
+
+  // MARK: history
+
+  storeSession(raw) {
+    const s = cleanSession(raw);
+    if (!s) return;
+    this.table();
+    const sql = this.ctx.storage.sql;
+    sql.exec('INSERT OR REPLACE INTO sessions (id, "end", json) VALUES (?, ?, ?)', s.id, s.end, JSON.stringify(s));
+    sql.exec(`DELETE FROM sessions WHERE id NOT IN (SELECT id FROM sessions ORDER BY "end" DESC LIMIT ${SESSIONS_KEPT})`);
+  }
+
+  /// GET /h/<id>: newest first, each with the photos the room still has.
+  history(t) {
+    if (!this.isOwner(t)) return json({ error: "forbidden" }, 403);
+    this.table();
+    const have = new Set(this.photoList().map((p) => p.t));
+    const sessions = this.ctx.storage.sql.exec('SELECT json FROM sessions ORDER BY "end" DESC').toArray().map((row) => {
+      const s = JSON.parse(row.json);
+      return { ...s, photos: s.photos.filter((p) => have.has(p)) };
+    });
+    return json({ sessions });
+  }
+
+  /// DELETE /h/<id>/<session>: the session and its photos. DELETE /h/<id>: every photo, and the list stays.
+  async erase(t, id) {
+    if (!this.isOwner(t)) return json({ error: "forbidden" }, 403);
+    this.table();
+    const sql = this.ctx.storage.sql;
+    if (id) {
+      const row = sql.exec("SELECT json FROM sessions WHERE id = ?", id).toArray()[0];
+      if (row) {
+        const s = JSON.parse(row.json);
+        sql.exec("DELETE FROM photos WHERE t >= ? AND t <= ?", s.start, s.end);
+        for (const p of s.photos) sql.exec("DELETE FROM photos WHERE t = ?", p);
+        sql.exec("DELETE FROM sessions WHERE id = ?", id);
+      }
+    } else {
+      sql.exec("DELETE FROM photos");
+    }
+    await this.reschedule();
+    this.refresh();
+    return json({ ok: true });
+  }
+
+  // MARK: devices and push
+
+  /// POST /device/<id>: the app says how to reach it. The seventh device replaces the one that
+  /// registered longest ago, because a reinstall brings a new id.
+  async register(request, t) {
+    if (!this.isOwner(t)) return json({ error: "forbidden" }, 403);
+    const device = cleanDevice(await readJson(request), request.cf?.timezone);
+    if (!device) return json({ error: "bad device" }, 400);
+    device.seen = Date.now();
+    this.devices = [...this.devices.filter((d) => d.dev !== device.dev), device]
+      .sort((x, y) => y.seen - x.seen)
+      .slice(0, DEVICES_KEPT);
+    await this.saveDevices();
+    return json({ ok: true });
+  }
+
+  async unregister(t, dev) {
+    if (!this.isOwner(t)) return json({ error: "forbidden" }, 403);
+    this.devices = this.devices.filter((d) => d.dev !== dev);
+    await this.saveDevices();
+    return json({ ok: true });
+  }
+
+  async saveDevices() {
+    const pro = this.devices.some((d) => d.pro);
+    await this.ctx.storage.put({ devices: this.devices, pro });
+    if (pro !== this.pro) {
+      this.pro = pro;
+      this.purge();
+      await this.reschedule();
+      this.refresh();
+    }
+  }
+
+  /// POST /test-push/<id>: "send a test alert".
+  async testPush(t) {
+    if (!this.isOwner(t)) return json({ error: "forbidden" }, 403);
+    if (!apns.configured(this.env)) return json({ error: "push not configured" }, 501);
+    const sends = this.devices.filter((d) => d.apns).map((device) =>
+      apns.sendPush(this.env, device, { type: "alert", token: device.apns, priority: 10, ttl: 300, body: apns.testAlert({ id: this.id, device }) }));
+    const results = await Promise.all(sends);
+    return json({ ok: true, sent: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length });
+  }
+
+  /// A state changed (or the Mac went away or came back): the pushes that calls for. Nothing at all
+  /// without the APNS_* secrets. The alarm alert is held for the first photo, up to 2.5 s.
+  async notify(prev, next, { online = true, wasOnline = online, force = false } = {}) {
+    if (!apns.configured(this.env) || this.devices.length === 0) return;
+    await this.flush();  // an alert still waiting for its photo goes first, so they arrive in order
+    const photo = this.latestPhoto(next.pass);
+    const pushes = apns.plan({ id: this.id, prev, next, devices: this.devices, online, wasOnline, photo, force, now: Date.now() });
+    const held = pushes.filter((p) => p.wait);
+    if (held.length) {
+      this.pending = { due: Date.now() + apns.PHOTO_WAIT_MS, pass: next.pass, items: held };
+      await this.ctx.storage.put("pending", this.pending);
+      await this.reschedule();
+    }
+    await this.deliver(pushes.filter((p) => !p.wait));
+  }
+
+  /// Sends the held alert, with the photo's time if there is one.
+  async flush(photo = null) {
+    const pending = this.pending;
+    if (!pending) return;
+    this.pending = null;
+    await this.ctx.storage.delete("pending");
+    for (const item of pending.items) if (photo) item.body.photo = photo;
+    await this.reschedule();
+    await this.deliver(pending.items);
+  }
+
+  async deliver(pushes) {
+    const results = await Promise.all(pushes.map(async (push) => {
+      const device = this.devices.find((d) => d.dev === push.dev);
+      return { push, result: device ? await apns.sendPush(this.env, device, push) : null };
+    }));
+    // Apple says this token is gone for good: stop asking.
+    const dead = results.filter(({ result }) => result?.status === 410);
+    if (!dead.length) return;
+    for (const { push } of dead) {
+      const device = this.devices.find((d) => d.dev === push.dev);
+      if (device) device[push.field] = null;
+    }
+    await this.saveDevices();
   }
 
   /// The owner reset the link: forget everything, and tell open pages the link is gone.
@@ -227,6 +728,11 @@ export class Room extends DurableObject {
     this.state = null;
     this.offlineAt = null;
     this.oldPasses = [];
+    this.queue = [];
+    this.notice = null;
+    this.devices = [];
+    this.pro = false;
+    this.pending = null;
     this.wiped = true;
     await this.ctx.storage.put("wiped", true);
     this.refresh();
@@ -239,27 +745,120 @@ function seesCamera(level) {
   return level === "owner" || level === "pass";
 }
 
-/// Only the fields the page shows, with sane types, from whatever the Mac sent.
+function cleanEvents(list) {
+  const events = Array.isArray(list) ? list.slice(-40) : [];
+  return events.map((e) => ({ t: num(e?.t), e: str(e?.e, 16), k: str(e?.k, 16) || null }));
+}
+
+/// Only the fields the page shows, with sane types, from whatever the Mac sent. A Mac from before
+/// v3 says nothing of the new ones: its `siren` becomes `stage: "siren"`, a triggered state without
+/// a stage is `soft`, and `v` stays 2 so the app knows to offer no commands.
 function clean(s) {
-  const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
-  const num = (v) => (Number.isFinite(v) ? v : 0);
-  const events = Array.isArray(s.events) ? s.events.slice(-40) : [];
+  const phase = ["idle", "arming", "armed", "triggered"].includes(s.phase) ? s.phase : "idle";
+  const siren = s.siren === true;
+  const mac = s.mac && typeof s.mac === "object" ? s.mac : null;
+  const health = s.health && typeof s.health === "object" ? s.health : null;
   return {
-    v: 2,
-    phase: ["idle", "arming", "armed", "triggered"].includes(s.phase) ? s.phase : "idle",
+    v: s.v >= 3 ? 3 : 2,
+    phase,
     since: num(s.since),
+    armEnd: num(s.armEnd),
+    lastEnd: num(s.lastEnd) || null,
     place: str(s.place, 16),
     note: str(s.note, 48),
-    push: s.push === true,
+    vol: Number.isFinite(s.vol) ? clamp(Math.round(s.vol), 0, 100) : 100,
     test: s.test === true,
     camera: s.camera === true,
+    push: s.push === true,
     trigger: str(s.trigger, 16) || null,
     at: num(s.at) || null,
-    siren: s.siren === true,
+    siren,
+    stage: phase !== "triggered" ? null : STAGES.includes(s.stage) ? s.stage : siren ? "siren" : "soft",
+    softEnd: num(s.softEnd) || null,
+    carried: s.carried === true,
     bumps: num(s.bumps),
-    events: events.map((e) => ({ t: num(e?.t), e: str(e?.e, 16), k: str(e?.k, 16) || null })),
-    pass: TOKEN.test(s.pass ?? "") ? s.pass : null,
+    mac: mac && { name: str(mac.name, 40), model: str(mac.model, 40), batt: Number.isFinite(mac.batt) ? clamp(Math.round(mac.batt), 0, 100) : null, chg: mac.chg === true },
+    health: health && { ax: health.ax === true, cam: health.cam === true, lid: health.lid === true, mot: health.mot === true },
+    events: cleanEvents(s.events),
+    pass: isToken(s.pass) ? s.pass : null,
   };
+}
+
+/// One finished session, as the history keeps it. Without an id and an end there is nothing to keep.
+function cleanSession(s) {
+  if (typeof s.id !== "string" || !SESSION.test(s.id) || !(num(s.end) > 0)) return null;
+  const count = (v) => Math.max(0, Math.round(num(v)));
+  return {
+    id: s.id,
+    start: num(s.start),
+    end: num(s.end),
+    place: str(s.place, 16),
+    bumps: count(s.bumps),
+    kind: ["quiet", "alarm", "test"].includes(s.kind) ? s.kind : "quiet",
+    trigger: str(s.trigger, 16) || null,
+    at: num(s.at) || null,
+    how: str(s.how, 16) || null,
+    soft: count(s.soft),
+    siren: count(s.siren),
+    photos: (Array.isArray(s.photos) ? s.photos : []).filter(Number.isFinite).slice(-12),
+    events: cleanEvents(s.events),
+    clip: str(s.clip, 80) || null,
+  };
+}
+
+/// A command from the owner's phone, or null. Only what its kind uses is kept.
+function cleanCommand(c) {
+  if (!c || typeof c !== "object" || typeof c.id !== "string" || c.id.length < 1 || c.id.length > 24 || !KINDS.includes(c.k)) return null;
+  const cmd = { id: c.id, k: c.k };
+  const take = (...names) => {
+    for (const name of names) {
+      const v = c[name];
+      if (name === "place" && PLACES.includes(v)) cmd.place = v;
+      else if (name === "note" && typeof v === "string") cmd.note = v.slice(0, 48);
+      else if (name === "test" && typeof v === "boolean") cmd.test = v;
+      else if (name === "vol" && Number.isFinite(v)) cmd.vol = clamp(Math.round(v), 0, 100);
+      else if (name === "by" && typeof v === "string") cmd.by = v.slice(0, 16);
+    }
+  };
+  if (c.k === "start") take("place", "note", "test");
+  if (c.k === "set") take("place", "note", "vol", "test");
+  if (c.k === "disarm") take("by");
+  return cmd;
+}
+
+/// A device's registration, or null. Its preferences have defaults, so an old app that does not
+/// know a switch leaves it as it is.
+function cleanDevice(d, requestZone) {
+  if (!d || typeof d.dev !== "string" || !DEVICE.test(d.dev)) return null;
+  const token = (v) => (v === undefined || v === null ? null : typeof v === "string" && HEX.test(v) ? v.toLowerCase() : false);
+  const apnsToken = token(d.apns), la = token(d.la), laStart = token(d.laStart);
+  if (apnsToken === false || la === false || laStart === false) return null;
+  const events = {};
+  for (const [name, fallback] of Object.entries(apns.DEFAULT_EVENTS)) events[name] = typeof d.events?.[name] === "boolean" ? d.events[name] : fallback;
+  return {
+    dev: d.dev,
+    name: str(d.name, 40),
+    apns: apnsToken,
+    env: d.env === "sandbox" ? "sandbox" : "production",
+    lang: d.lang === "zh" ? "zh" : "en",
+    crit: d.crit === true,
+    pro: d.pro === true,
+    events,
+    la,
+    laStart,
+    tz: zone(d.tz) ?? zone(requestZone) ?? "UTC",
+  };
+}
+
+/// An IANA time zone name the runtime knows, or undefined. Alerts show the time of day in it.
+function zone(name) {
+  if (typeof name !== "string" || name.length > 64) return undefined;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: name });
+    return name;
+  } catch {
+    return undefined;
+  }
 }
 
 const PAGE = `<!doctype html>
@@ -523,5 +1122,49 @@ const PAGE = `<!doctype html>
   }
   render();
   connect();
+</script>
+</html>`;
+
+
+/// What the QR code's link opens in Safari: the app, or a line that says to install it. It never
+/// touches the relay, so it cannot reveal anything; the code travels in the link to the app.
+const PAIR_PAGE = `<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#0b0f1c">
+<title>BRB</title>
+<style>
+  :root { --bg: #0b0f1c; --ink: #eef1f8; --dim: rgba(238, 241, 248, .62); --amber: #f6b544; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
+    background: radial-gradient(120% 60% at 50% 0%, #1b2440 0%, var(--bg) 60%) fixed;
+  }
+  main { max-width: 360px; text-align: center; display: grid; gap: 14px; justify-items: center; }
+  svg { width: 44px; height: 44px; }
+  h1 { font-size: 22px; line-height: 1.25; margin: 0; font-weight: 650; text-wrap: balance; }
+  p { margin: 0; color: var(--dim); }
+  a { display: inline-block; margin-top: 6px; padding: 12px 26px; border-radius: 99px; background: var(--amber); color: #241700; font-weight: 600; text-decoration: none; }
+</style>
+<main>
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8 19.4 5.6v5.8c0 4.8-3.1 8.6-7.4 10.1-4.3-1.5-7.4-5.3-7.4-10.1V5.6Z" fill="#f6b544"/><circle cx="12" cy="11.4" r="2.4" fill="#2b1a00"/></svg>
+  <h1 id="title"></h1>
+  <p id="sub"></p>
+  <a id="open" href="#"></a>
+</main>
+<script>
+  const zh = (navigator.languages || [navigator.language]).some((l) => /^zh/i.test(l || ""));
+  document.documentElement.lang = zh ? "zh-Hans" : "en";
+  document.getElementById("title").textContent = zh ? "在 iPhone 上打开 BRB" : "Open BRB on your iPhone";
+  document.getElementById("sub").textContent = zh ? "如果没有自动打开，先安装 BRB，再回到这里点下面的按钮。" : "If it doesn't open by itself, install BRB, then come back and tap the button.";
+  const open = document.getElementById("open");
+  open.textContent = zh ? "打开 BRB" : "Open BRB";
+  open.href = "brb://pair?c=" + encodeURIComponent(location.pathname.split("/")[2] || "") + "&h=" + encodeURIComponent(location.host);
+  setTimeout(() => { location.href = open.href; }, 150);
 </script>
 </html>`;

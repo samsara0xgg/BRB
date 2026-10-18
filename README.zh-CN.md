@@ -60,9 +60,11 @@ cd BRB
 ## 手机
 
 - **提醒**（可选）通过 [ntfy](https://ntfy.sh) 推送。在面板里打开，用 ntfy App 扫码订阅，发一条测试。报警时推送发生了什么和一张照片，解除后再推一条。订阅名是唯一的钥匙，ntfy.sh 上的照片保留 3 小时。
-- **手机页面** 的链接和二维码在面板里。报警前只显示电脑有没有在警戒；报警后能看实时画面、最多 6 张照片（保留 30 天）和经过。页面只能看，不能控制电脑。报警推送里的链接只在这次报警解除前有效（因为 ntfy 会保存消息）；面板里的链接一直有效。面板里的 **重置链接** 会让旧链接立刻失效，并清掉中继上存的东西。
+- **手机页面** 的链接和二维码在面板里。报警前只显示电脑有没有在警戒；报警后能看实时画面、最多 6 张照片（保留 7 天）和经过。页面只能看，不能控制电脑。报警推送里的链接只在这次报警解除前有效（因为 ntfy 会保存消息）；面板里的链接一直有效。面板里的 **重置链接** 会让旧链接立刻失效，并清掉中继上存的东西。
 
 页面跑在 `relay/` 里的中继上，是一个 Cloudflare Worker，默认用作者部署的那个。想用自己的：运行 `cd relay && npx wrangler deploy`，再运行 `defaults write com.allen.guard-mode relayHost <你的-worker>.workers.dev`，然后重启 BRB。还可以在 Worker 上设置 `CAM_IDS`，只允许列出的房间号连接（面板里手机链接 `/v/` 后面那串）。
+
+**iPhone App** 在「设置 → 手机 → **配对 iPhone…**」里和这台 Mac 配对：扫码，或输入那六位数字。配对后可以在 App 里关掉警笛、解除警戒、远程开始或停止警戒，并查看历史记录。这需要中继 v3，所以请再运行一次 `npx wrangler deploy`。给 App 的推送是可选的，需要把你的 Apple 推送密钥放进 Worker 的密钥（`npx wrangler secret put APNS_KEY`，再设置 `APNS_KEY_ID`、`APNS_TEAM_ID` 和 `APNS_TOPIC`）；没有它们，App 开着时仍然可以用。协议写在 `relay/PROTOCOL.md` 里；`cd relay && npm ci && npm test` 会跑中继的测试。
 
 ## 命令
 

@@ -182,6 +182,57 @@ func selftest(hardware: Bool) {
   quiet.trigger = nil
   quiet.bumps = 0
   check(!quiet.welcome.alarmed && quiet.welcome.chips.count == 2, "welcome after a quiet run: two chips")
+  quiet.disarm = .phone
+  check(quiet.quiet && !quiet.alarmed && !Disarm.phone.phrase.isEmpty && Disarm(rawValue: "phone") == .phone, "disarmed from the phone: a quiet end with its own words")
+
+  // The iPhone app: what the relay forwards, and what the Mac sends it.
+  let startCommand = PhoneCommand.decode(["id": "c1", "k": "start", "place": "cafe", "note": "Back at 3", "test": true, "vol": 150])
+  let startKind = startCommand?.kind == .start, startPlace = startCommand?.place == .cafe
+  let startNote = startCommand?.note == "Back at 3", startTest = startCommand?.test == true, startVol = startCommand?.vol == 100
+  check(startKind && startPlace && startNote && startTest && startVol, "phone command: start with its place, note and test flag, the volume clamped")
+  let noKind = PhoneCommand.decode(["id": "c2", "k": "format"]) == nil, noId = PhoneCommand.decode(["k": "hush"]) == nil
+  let longId = PhoneCommand.decode(["id": String(repeating: "x", count: 25), "k": "hush"]) == nil
+  let emptyId = PhoneCommand.decode(["id": "", "k": "stop"]) == nil
+  check(noKind && noId && longId && emptyId, "phone command: an unknown kind, no id, an empty or a 25-character id are refused")
+  let byFace = PhoneCommand.decode(["id": "c3", "k": "disarm", "by": "face"])?.by == "face"
+  let noMoon = PhoneCommand.decode(["id": "c4", "k": "set", "place": "moon"])?.place == nil
+  check(byFace && noMoon, "phone command: disarm says by whom, an unknown place is dropped")
+
+  var seen = LiveState(phase: "triggered", since: 1, armEnd: 0, place: "cafe", note: "x", vol: 70, camera: true)
+  seen.stage = "hushed"
+  seen.mac = LiveState.Mac(name: "Test Mac", model: "Mac14,5", batt: 80, chg: true)
+  seen.health = LiveState.Health(ax: true, cam: true, lid: false, mot: true)
+  func sent<T: Encodable>(_ key: String, _ value: T) -> [String: Any]? {
+    let data = try? JSONEncoder().encode([key: value])
+    let top = data.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
+    return top?[key] as? [String: Any]
+  }
+  let state = sent("state", seen)
+  let mac = state?["mac"] as? [String: Any], health = state?["health"] as? [String: Any]
+  let version = state?["v"] as? Int, stage = state?["stage"] as? String, volume = state?["vol"] as? Int
+  let charge = mac?["batt"] as? Int, lidFine = health?["lid"] as? Bool
+  check(version == 3 && stage == "hushed" && volume == 70 && charge == 80 && lidFine == false && state?["lastEnd"] == nil,
+        "state for the relay: version 3, stage, volume, the Mac and its health; no last end yet")
+  let record = SessionRecord(id: "1790000000000", start: 1, end: 2, place: "cafe", bumps: 2, kind: "alarm", trigger: "lifted", at: 1, how: "phone",
+                             soft: 0, siren: 12, photos: [1, 2], events: [LiveState.Event(t: 1, e: "armed", k: "cafe")], clip: nil)
+  let sentSession = sent("session", record)
+  let howEnded = sentSession?["how"] as? String
+  let photoCount = (sentSession?["photos"] as? [Int])?.count
+  let firstEvent = (sentSession?["events"] as? [[String: Any]])?.first?["e"] as? String
+  check(howEnded == "phone" && photoCount == 2 && firstEvent == "armed" && sentSession?["clip"] == nil, "session for the history: how it ended, its photos and events; no clip key")
+  let offer = PairOffer(code: "123456", qr: "abcdefgh23456789", expires: Date())
+  check(offer.spaced == "123 456" && offer.link.hasSuffix("/pair/abcdefgh23456789"), "pairing code: read as 123 456, the QR carries the relay's /pair/ link")
+  let named = !MacInfo.name.isEmpty && MacInfo.name.count <= 40, modelled = !MacInfo.model.isEmpty && MacInfo.model.count <= 40
+  check(named && modelled, "this Mac: name \(MacInfo.name), model \(MacInfo.model)")
+  if let battery = MacInfo.battery() { check((0...100).contains(battery.percent), "battery \(battery.percent) %, \(battery.charging ? "charging" : "not charging")") }
+
+  var hushed = Place.library.motionDetector()
+  for s in carry().prefix(300) { _ = hushed.feed(s) }
+  hushed.baseline()
+  for s in carry().dropFirst(300) { _ = hushed.feed(s) }
+  check(hushed.carried && !Place.transit.motionDetector().carried, "carried at 2 Hz: reported as carried (never on the go)")
+  hushed.settle()
+  check(!hushed.carried && hushed.feed(still(1)[0]) == nil, "after the owner's hush: settled, and carried again only when it moves again")
 
   let looks: [StatusIcon.Look] = [.idle, .arming(0.4), .armed, .partial, .test, .alarm, .clear, .badge]
   check(looks.allSatisfy { StatusIcon.image($0).cgImage(forProposedRect: nil, context: nil, hints: nil) != nil }, "menu-bar shield draws in all eight looks")
@@ -317,7 +368,8 @@ func liveCommand(seconds: Double) {
   do { try camera.start() } catch { print("camera failed: \(error)"); exit(1) }
   camera.allowLive()
   let live = Live()
-  live.start(camera, state: LiveState(phase: "armed", since: LiveState.ms(Date()), place: Prefs.place.rawValue, note: Prefs.note, camera: true))
+  live.helloVersion = 2  // commands and the pairing notice are for the app, not for this
+  live.start(camera, state: LiveState(v: 2, phase: "armed", since: LiveState.ms(Date()), place: Prefs.place.rawValue, note: Prefs.note, camera: true))
   log("phone page at \(Live.link.absoluteString)")
   DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
     live.stop()

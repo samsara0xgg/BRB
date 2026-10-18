@@ -303,6 +303,8 @@ final class PanelModel: ObservableObject {
   @Published var confirmPreview = false
   @Published var previewAt = Date.distantPast
   @Published var settingsTab = SettingsTab.general
+  /// The iPhone app's pairing code, for Settings → Phone.
+  let pairing = PairingModel()
 
   /// `true`: a silent run this once.
   var onArm: (Bool) -> Void = { _ in }
@@ -314,6 +316,8 @@ final class PanelModel: ObservableObject {
   var onIntro: () -> Void = {}
   /// The panel showed the alarms: the menu-bar shield drops its red dot.
   var onSeen: () -> Void = {}
+  /// New results of the checks: a paired iPhone is told what works.
+  var onChecks: ([Check]) -> Void = { _ in }
   /// The snapshot command's: it shows what it was given, never this Mac's checks or history.
   let canned: Bool
   private var sleepRule: Bool?
@@ -419,6 +423,7 @@ final class PanelModel: ObservableObject {
   /// New results: the card keeps the rows it listed, so a fixed one ticks, says what it does now and
   /// folds away 0.95 s later; the last one takes the card with it.
   func apply(_ new: [Check]) {
+    onChecks(new)
     let first = checks.isEmpty
     checks = new
     var rows = fixRows.map { row in new.first { $0.id == row.id } ?? row }
