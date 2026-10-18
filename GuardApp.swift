@@ -112,7 +112,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
   private var clip: URL?
   private var photos = 0
   private var photoTimes: [Int64] = []
-  private var latestPhoto: Data?
   // The menu-bar shield between sessions (audit C5, D4).
   /// The look it keeps while the notice flies back, so it changes as the notice lands.
   private var parked: StatusIcon.Look?
@@ -295,7 +294,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     clip = nil
     photos = 0
     photoTimes = []
-    latestPhoto = nil
     parked = nil
     landing = false
     stopIconAnimation()
@@ -345,10 +343,10 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     m.note = Prefs.note
     m.armedAt = armedAt
     m.recording = recorder != nil
-    m.pushOn = Push.enabled
+    m.pushOn = Prefs.phonePaired
     m.locked = screenLocked
     var first = LiveState(phase: phase.rawValue, since: LiveState.ms(armedAt), armEnd: LiveState.ms(armedAt.addingTimeInterval(GuardApp.countdownSeconds)),
-                          place: Prefs.place.rawValue, note: Prefs.note, vol: volumePercent, push: Push.enabled, test: test, camera: recorder != nil)
+                          place: Prefs.place.rawValue, note: Prefs.note, vol: volumePercent, test: test, camera: recorder != nil)
     first.lastEnd = lastEnd
     if holding {  // the Mac's own details go to the relay only for a phone that is paired
       first.mac = mac ?? MacInfo.card()
@@ -452,7 +450,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
           degraded = true
           render()
           live.update(event: "warning", key: "motion") { if self.holding { $0.health = self.health } }
-          if Push.enabled { Push.warning(L("The motion sensor stopped. The lid, the charger and touch still count."), test: test) }
         }
       } else if silentSince != nil {
         silentSince = nil
@@ -503,7 +500,7 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     phase = .triggered
     log("TRIGGERED: \(kind.rawValue), \(detail)")
     fingerprint.stop(returnFocus: false)  // the lock screen takes over
-    veil.model.pushOn = Push.enabled
+    veil.model.pushOn = Prefs.phonePaired
     veil.alarm(pointer: pointer, origin: kind.floodOrigin)
 
     // The red spreads first, so whoever touched it sees why; the tap swallows input meanwhile.
@@ -541,7 +538,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
           $0.stage = Stage.siren.rawValue
           $0.softEnd = nil
         }
-        if Push.enabled { Push.siren(test: test, link: live.alarmLink, photo: latestPhoto) }
       }
     }
 
@@ -556,12 +552,10 @@ final class GuardApp: NSObject, NSApplicationDelegate {
       $0.carried = false
       $0.bumps = motion.bumps
     }
-    let link = live.alarmLink
     if let recorder {
       clip = recorder.save { [weak self] photo in
         guard let self else { return }
         if let photo, triggeredAt == at { took(photo) }
-        if Push.enabled { Push.alarm(kind, at: at, test: test, link: link, photo: photo) }
       }
       for delay in [2.0, 5.0] {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
@@ -572,8 +566,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
           }
         }
       }
-    } else if Push.enabled {
-      Push.alarm(kind, at: at, test: test, link: link, photo: nil)
     }
   }
 
@@ -581,7 +573,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     let at = Date()
     photos += 1
     photoTimes.append(LiveState.ms(at))
-    latestPhoto = photo
     live.upload(photo, at: at)
     live.event("photo", at: at)
   }
@@ -628,7 +619,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     if recorded { History.add(session) }
     // Test mode covers one run, then turns itself off (audit H1).
     if test && guarded { Prefs.testMode = false }
-    if trigger != nil && Push.enabled { Push.disarmed(how, at: now, test: test) }
     // One state with its event: the relay (and the push it may send) reads how it ended from them together.
     let last = lastEnd
     degraded = false
@@ -732,7 +722,6 @@ final class GuardApp: NSObject, NSApplicationDelegate {
     s.place = Prefs.place.rawValue
     s.note = Prefs.note
     s.vol = volumePercent
-    s.push = Push.enabled
     s.test = Prefs.testMode  // the next run is a test
     s.camera = baseHealth.cam
     s.siren = false

@@ -55,7 +55,6 @@ case "keys": keysCommand(seconds: seconds ?? 30)
 case "siren": sirenCommand(seconds: seconds ?? 3)
 case "record": recordCommand(seconds: seconds ?? 60)
 case "camera": cameraCommand(seconds: seconds ?? 40)
-case "push": Push.test { exit($0 ? 0 : 1) }; RunLoop.main.run()
 case "live": liveCommand(seconds: seconds ?? 60)
 case "lid-rule":  // as root with --no-prompt (CI), or as the user behind the password prompt
   let user = args.count > 1 && !args[1].hasPrefix("-") ? args[1] : NSUserName()
@@ -73,7 +72,7 @@ case nil:
   app.delegate = delegate
   app.run()
 default:
-  print("usage: brb [selftest [--no-hardware] | sensors [s] | keys [s] | siren [s] | record [s] | camera [s] | push | live [s] | lid-rule [user] [--no-prompt] | dmg-background <out> | snapshot <stage> [png]]")
+  print("usage: brb [selftest [--no-hardware] | sensors [s] | keys [s] | siren [s] | record [s] | camera [s] | live [s] | lid-rule [user] [--no-prompt] | dmg-background <out> | snapshot <stage> [png]]")
   exit(2)
 }
 

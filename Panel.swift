@@ -155,7 +155,7 @@ enum Preflight {
     let touchID = LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
     let secure = IsSecureEventInputEnabled()
     let lock = GuardApp.lockScreen != nil
-    let push = Push.enabled
+    let push = Prefs.phonePaired
     DispatchQueue.global(qos: .userInitiated).async {
       let sleep = known ?? sleepRuleInstalled()
       DispatchQueue.main.async {
@@ -277,13 +277,8 @@ final class PanelModel: ObservableObject {
   @Published var volume = Double(Alarm.loudVolume * 100) { didSet { if !canned { Alarm.loudVolume = Float32(volume / 100) } } }
   @Published var testMode = Prefs.testMode { didSet { if !canned { Prefs.testMode = testMode } } }
   @Published var veil = Prefs.veil { didSet { if !canned { Prefs.veil = veil } } }
-  @Published var pushOn = Push.enabled {
-    didSet {
-      guard pushOn != oldValue, !canned else { return }
-      Push.enabled = pushOn
-      poll()
-    }
-  }
+  /// A paired iPhone gets the alarms.
+  @Published var pushOn = Prefs.phonePaired
   @Published var history: [Session] = []
   @Published var clips: [Clip] = []
   /// Real alarms that ended after this are new to the owner: "New" on their row.
@@ -291,8 +286,6 @@ final class PanelModel: ObservableObject {
   /// The countdown, for the panel when the frosted screen is off.
   @Published var remaining = 5
   @Published var countdownFrom = Date()
-  @Published var testPush: Bool?
-  @Published var sending = false
   @Published var copied: String?
   @Published var installing = false
   @Published var confirmReset = false
@@ -366,7 +359,7 @@ final class PanelModel: ObservableObject {
     volume = Double(Alarm.loudVolume * 100)
     testMode = Prefs.testMode
     veil = Prefs.veil
-    pushOn = Push.enabled
+    pushOn = Prefs.phonePaired
     history = History.load()
     clips = PanelModel.clips(history)
     liveLink = Live.link.absoluteString
@@ -567,15 +560,6 @@ final class PanelModel: ObservableObject {
     }
     RunLoop.main.add(t, forMode: .common)
     awaiting = t
-  }
-
-  func sendTestPush() {
-    sending = true
-    testPush = nil
-    Push.test { [weak self] ok in
-      self?.sending = false
-      self?.testPush = ok
-    }
   }
 
   func copy(_ text: String, as what: String) {

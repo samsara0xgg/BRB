@@ -79,16 +79,6 @@
 "Installing…" = "正在安装…";
 "BRB keeps the Mac awake with the lid shut while it guards." = "BRB 警戒时，合上盖子电脑也保持唤醒。";
 "Set up" = "设置";
-"Send alerts to my phone" = "报警时通知手机";
-"An alarm sends what happened and a photo" = "报警时发送经过和一张照片";
-"Install the free ntfy app" = "安装免费的 ntfy App";
-"Scan this code, or paste the topic under + in ntfy" = "扫这个码，或在 ntfy 里点 + 粘贴订阅名";
-"Send a test below" = "在下面发一条测试";
-"Copy topic" = "复制订阅名";
-"Sent. Check your phone." = "已发送，看看手机。";
-"Couldn't send. Check the network." = "没发出去，检查一下网络。";
-"Send a test" = "发送测试";
-"Alerts go through ntfy.sh. The topic name is the only key, and photos are kept there for 3 hours." = "提醒经过 ntfy.sh。订阅名是唯一的钥匙，照片在那里保留 3 小时。";
 "Open this on your phone and keep it." = "在手机上打开并收藏它。";
 "Before an alarm it only shows whether this Mac is guarded. After one it shows the camera, the photos and what happened." = "报警前只显示电脑是否在警戒。报警后能看到画面、照片和经过。";
 "The page can only watch. It can't control this Mac." = "这个页面只能看，不能控制电脑。";
@@ -118,7 +108,6 @@
 "Play" = "播放";
 "Three cards on what BRB does" = "用三张卡片介绍 BRB";
 "Show again" = "再看一遍";
-"Alerts" = "提醒";
 "New link made" = "已生成新链接";
 "Reset link…" = "重置链接…";
 "The old link stops working at once." = "旧链接会立即失效。";
@@ -152,24 +141,13 @@
 "All set" = "一切就绪";
 
 /* GuardApp.swift */
-"The motion sensor stopped. The lid, the charger and touch still count." = "运动传感器停了。合盖、拔电源和触碰仍会报警。";
 "Stop guarding" = "解除警戒";
 "Not guarding" = "未在警戒";
 "Not guarding · a new alarm to look at" = "未在警戒 · 有新的报警待查看";
 "Settings…" = "设置…";
 
 /* Push.swift */
-"%@ · Siren on" = "%@ · 警笛已响";
-"%@ · Screen locked, siren in 10 s" = "%@ · 已锁屏，10 秒后响警笛";
-"The siren is sounding" = "警笛响了";
-"It's been 10 s and nobody has disarmed it" = "已经响了 10 秒，还没有人解除";
 "Disarmed" = "已解除";
-"%@ · %@" = "%@ · %@";
-"BRB needs a look" = "BRB 需要你看一下";
-"Test: %@" = "测试：%@";
-"Watch live" = "看实时画面";
-"BRB test" = "BRB 测试";
-"If you see this, alarms will reach this phone." = "收到这条，报警时就会推送到这台手机。";
 
 /* History.swift */
 "Ignored 1 bump" = "忽略了 1 次轻碰";

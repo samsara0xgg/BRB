@@ -90,13 +90,11 @@ power button, so the power button waits 400 ms for the finger before it counts.
 
 ## Phone
 
-- **Alerts** (optional) go through [ntfy](https://ntfy.sh). Turn them on in the panel, scan the code
-  with the ntfy app, and send a test. An alarm sends what happened and a photo; a disarm follows.
-  The topic name is the only secret, and ntfy.sh keeps a photo for 3 hours.
+- **Alerts** reach the iPhone app (below): an alarm with what happened and a photo, then the disarm.
 - **The phone page** is a link in the panel, with a QR code. Before an alarm it shows whether the
-  Mac is guarded; after one, the live camera, up to 6 photos (kept 7 days) and what happened. It
-  can only watch. The link in an alarm push works only until that alarm is disarmed, because ntfy
-  keeps its messages; the panel's link keeps working. **Reset link** in the panel makes the old
+  Mac is guarded; after one, the live camera, up to 3 photos (kept 7 days) and what happened. It
+  can only watch. The link in an alarm push works only until that alarm is disarmed; the panel's
+  link keeps working. **Reset link** in the panel makes the old
   one stop working and forgets what the relay kept.
 
 The page runs on the relay in `relay/`, a Cloudflare Worker; out of the box the app uses the

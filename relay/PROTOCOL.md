@@ -64,7 +64,7 @@ marked new. `clean()` in the relay drops anything else and clamps types.
 | `vol` | 0–100, **new** | siren volume |
 | `test` | bool | test mode: every stage runs without a sound |
 | `camera` | bool | the camera works this session |
-| `push` | bool | the Mac also sends ntfy alerts |
+| `push` | bool | the Mac also sent ntfy alerts; always false since the Mac dropped them |
 | `trigger` | `Trigger` raw value or null | `lifted tilted lidClosed lidMoved charger powerKey keyboard trackpad finger restarted` |
 | `at` | ms or null | when the alarm started |
 | `siren` | bool | the loud stage is playing |
@@ -157,8 +157,7 @@ registered device (for "send a test alert").
 
 When `APNS_KEY`, `APNS_KEY_ID`, `APNS_TEAM_ID` and `APNS_TOPIC` secrets are set, the relay sends APNs
 alerts on state changes (HTTP/2 to `api.push.apple.com`, or `api.sandbox.push.apple.com` per device
-`env`, ES256 JWT cached for 50 minutes). Without them it sends nothing and the Mac's ntfy alerts remain
-the only push.
+`env`, ES256 JWT cached for 50 minutes). Without them it sends no push at all.
 
 | event (from the state change) | level | `loc-key`s in the app's strings | category |
 | --- | --- | --- | --- |
